@@ -1,0 +1,8 @@
+# OS마다 줄바꿈이 달라 생기는 diff와 실행 오류를 막습니다
+* text=auto
+gradlew text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.docx binary
+*.png binary

@@ -1,0 +1,35 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Gradle / 빌드 결과물
+.gradle/
+build/
+out/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# 로컬 환경 (PC마다 다름)
+local.properties
+
+# 비밀 정보: 서명 키, 로컬 설정, 환경 변수
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
+**/application-local.yml
+**/application-local.properties
+
+# 제출용 release APK는 apk/ 폴더에만 둡니다
+*.apk
+!apk/*.apk
+
+# 개인정보가 들어간 참가신청서 작성본은 저장소에 넣지 않습니다
+docs/*작성본*
+docs/*filled*
+docs/*signed*
