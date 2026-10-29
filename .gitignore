@@ -16,14 +16,12 @@ captures/
 # 로컬 환경 (PC마다 다름)
 local.properties
 
-# 비밀 정보: 서명 키, 로컬 설정, 환경 변수
+# 비밀 정보: 서명 키, 환경 변수
 *.jks
 *.keystore
 keystore.properties
 .env
 .env.*
-**/application-local.yml
-**/application-local.properties
 
 # 제출용 release APK는 apk/ 폴더에만 둡니다
 *.apk

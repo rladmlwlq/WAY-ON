@@ -28,8 +28,8 @@
 | 영역 | 선택 | 버전 | 근거 |
 |---|---|---|---|
 | 서버 언어 | Java | 21 (LTS) | 장기 지원 버전이고 record 문법을 쓸 수 있어서 DTO가 짧아집니다 |
-| 서버 프레임워크 | Spring Boot | 착수 시점에 OSS 지원 중인 최신 안정판 (3.5.x 또는 4.0.x) ※ | 요청하신 Controller/Service/Mapper 계층과 그대로 맞습니다 |
-| DB 접근 | MyBatis (mybatis-spring-boot-starter) | 위 Spring Boot와 호환되는 버전 | SQL을 직접 보며 관리할 수 있습니다. 잠금 쿼리(`FOR UPDATE`)도 명확하게 쓸 수 있습니다 |
+| 서버 프레임워크 | Spring Boot | 4.1.2 (2026-10-29 확인: 3.5는 지원 종료, 4.0은 2026-12-31 종료, 4.1은 2027-07-31까지) ※ | 요청하신 Controller/Service/Mapper 계층과 그대로 맞습니다 |
+| DB 접근 | MyBatis (mybatis-spring-boot-starter) | 4.1.0 (Spring Boot 4.1 지원 버전) | SQL을 직접 보며 관리할 수 있습니다. 잠금 쿼리(`FOR UPDATE`)도 명확하게 쓸 수 있습니다 |
 | DB | MySQL | 8.4 LTS | 국내에서 흔하고 운영 자료가 많습니다. 공간 확장 기능은 필요 없습니다 (1.4 참고) |
 | 외부 API 호출 | Spring `RestClient` | Spring 내장 | 새 라이브러리 없이 HTTP를 호출합니다 |
 | 서버 빌드 | Gradle | 8.x | 차량 앱과 같은 도구를 씁니다 |
@@ -40,7 +40,7 @@
 | 차량 SDK | Pleos Connect SDK: Vehicle, NaviHelper, FusedLocation, TextToSpeech | 문서 기준 최신 (NaviHelper 3.0.5 확인) | 공모전 심사 항목 '기술 활용성'에 해당합니다 |
 | 폰 화면 | 정적 HTML + 순수 JavaScript | — | 앱을 설치할 필요가 없습니다(QR → 브라우저). 빌드 도구도 필요 없습니다 |
 
-※ Spring Boot 버전별 지원 종료일은 착수 날 공식 페이지에서 확인한 뒤 고정합니다. 이 문서에서는 확인하지 않았습니다.
+※ Spring Boot 버전은 착수 날(2026-10-29) 지원 종료일을 확인하고 고정했습니다. 2027-02 전시 기간까지 지원되는 버전입니다.
 
 **의도적으로 쓰지 않는 것:** Spring Security, WebSocket, Redis, Lombok, MapStruct, 프런트 프레임워크(React 등), Firebase. 왜 빼는지는 3.1과 4장에 적었습니다.
 
@@ -58,7 +58,7 @@
 
 ```
 com.restmate
-├── common/          ErrorCode, BusinessException, GlobalExceptionHandler, ErrorResponse
+├── common/          ErrorCode, BusinessException, GlobalExceptionHandler, ErrorResponse, HealthController(/health: 서버·DB 연결 확인)
 ├── auth/            TripTokenInterceptor, TokenHasher, TripRole
 ├── config/          WebConfig (인터셉터 등록), 스케줄 설정
 ├── restarea/        RestAreaController, RestAreaService, RestAreaMapper, CandidateFinder, dto/, RestArea, Facility
