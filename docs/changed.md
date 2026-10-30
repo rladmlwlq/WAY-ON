@@ -2,7 +2,7 @@
 
 > 기준: 「Co-Pilot Connect 기획·설계서」(2026-10-23, Claude Docs). design.md보다 나중에 나온 기획서이므로, 서로 다른 부분은 **이 문서와 기획서가 우선**합니다.
 > design.md 본문은 고치지 않았습니다. 여기 적힌 부분 말고는 design.md를 그대로 따릅니다.
-> 상태: **검토 대기**. ERD·schema.sql은 이 문서가 승인되면 반영합니다.
+> 상태: **검토 대기**. ERD는 erd.md에 반영했습니다. schema.sql은 아직 이전 구조입니다.
 
 ---
 
@@ -96,122 +96,9 @@
 
 ### 4.2 변경 후 ERD
 
-```mermaid
-erDiagram
-    VEHICLE ||--o{ PASSENGER : "등록된 동승자"
-    VEHICLE ||--o{ CONNECT_CODE : "일회용 연결 코드"
-    VEHICLE ||--o{ TRIP : "주행 세션"
-    TRIP ||--o{ TRIP_PASSENGER : "이번 세션 연결"
-    PASSENGER ||--o{ TRIP_PASSENGER : "참여"
-    TRIP ||--o{ WAYPOINT_REQUEST : "요청을 받음"
-    PASSENGER ||--o{ WAYPOINT_REQUEST : "요청함"
-    REST_AREA ||--o{ FACILITY : "시설을 가짐"
+전체 ERD, 테이블 요약, 관계, 상태 값, 인덱스는 **[erd.md](erd.md)**에 있습니다. 여기에는 변경 이유와 차이만 남깁니다.
 
-    VEHICLE {
-        BIGINT id PK
-        CHAR(32) public_id UK
-        CHAR(64) car_token_hash "차량 토큰 SHA-256"
-        DATETIME(3) created_at
-        DATETIME(3) last_seen_at "NULL 가능"
-    }
-
-    PASSENGER {
-        BIGINT id PK
-        BIGINT vehicle_id FK
-        CHAR(64) reconnect_token_hash "재연결 토큰 SHA-256"
-        VARCHAR(30) label "차량 앱 목록 표시용, NULL 가능"
-        DATETIME(3) created_at
-        DATETIME(3) last_connected_at "NULL 가능"
-        DATETIME(3) revoked_at "해제 시각, NULL이면 유효"
-    }
-
-    CONNECT_CODE {
-        BIGINT id PK
-        BIGINT vehicle_id FK
-        VARCHAR(5) kind "QR, PIN"
-        CHAR(64) code_hash
-        DATETIME(3) expires_at "짧은 만료"
-        DATETIME(3) used_at "NULL이면 미사용"
-        SMALLINT fail_count "PIN 시도 횟수 제한용"
-    }
-
-    TRIP {
-        BIGINT id PK
-        CHAR(32) public_id UK
-        BIGINT vehicle_id FK
-        VARCHAR(10) status "ACTIVE, ENDED, EXPIRED"
-        DATETIME(3) car_consented_at "차량 쪽 위치 공유 동의, NULL 가능"
-        VARCHAR(100) dest_name "NULL 가능"
-        DECIMAL(9_6) dest_lat "NULL 가능"
-        DECIMAL(9_6) dest_lng "NULL 가능"
-        DECIMAL(9_6) last_lat "종료 시 NULL"
-        DECIMAL(9_6) last_lng "종료 시 NULL"
-        SMALLINT last_heading "NULL 가능"
-        DATETIME(3) last_reported_at "NULL 가능"
-        VARCHAR(5) energy_type "EV, FUEL, NULL 가능"
-        TINYINT energy_pct "NULL 가능"
-        DATETIME(3) low_energy_alerted_at "중복 제안 방지, NULL 가능"
-        DATETIME(3) created_at
-        DATETIME(3) last_activity_at "5분 무통신 만료 기준"
-        DATETIME(3) ended_at "NULL 가능"
-    }
-
-    TRIP_PASSENGER {
-        BIGINT trip_id PK, FK
-        BIGINT passenger_id PK, FK
-        DATETIME(3) joined_at
-        DATETIME(3) consented_at "폰 쪽 위치 공유 동의"
-    }
-
-    WAYPOINT_REQUEST {
-        BIGINT id PK
-        BIGINT trip_id FK
-        BIGINT passenger_id FK
-        VARCHAR(15) place_type "REST_AREA, EV_CHARGER, GAS_STATION, RESTAURANT"
-        VARCHAR(50) place_ext_id "외부 데이터 ID, NULL 가능"
-        VARCHAR(100) poi_name
-        VARCHAR(200) address "NULL 가능"
-        DECIMAL(9_6) lat
-        DECIMAL(9_6) lng
-        VARCHAR(15) action "ADD, REPLACE_FIRST, SET_DEST"
-        VARCHAR(10) status "PENDING, ACCEPTED, APPLIED, REJECTED, FAILED, EXPIRED"
-        DATETIME(3) requested_at
-        DATETIME(3) decided_at "NULL 가능"
-        VARCHAR(200) fail_reason "NULL 가능"
-    }
-
-    REST_AREA {
-        BIGINT id PK
-        VARCHAR(50) name
-        VARCHAR(50) route_name
-        VARCHAR(20) direction_label
-        DECIMAL(9_6) lat
-        DECIMAL(9_6) lng
-        SMALLINT travel_bearing "반대 차로 제외용"
-        DATETIME(3) updated_at
-    }
-
-    FACILITY {
-        BIGINT id PK
-        BIGINT rest_area_id FK
-        VARCHAR(20) type "TOILET, FOOD_COURT, STORE, FUEL, EV_CHARGER, NURSING_ROOM"
-        VARCHAR(50) name
-        VARCHAR(50) open_hours "NULL 가능"
-    }
-```
-
-### 4.3 상태 값
-
-**trip.status**: `ACTIVE` → `ENDED`(차량 앱이 종료) 또는 `EXPIRED`(5분 무통신)
-
-**waypoint_request.status**: 전이 규칙은 design.md 3.4와 같습니다.
-```
-PENDING  → ACCEPTED | REJECTED | EXPIRED
-ACCEPTED → APPLIED  | FAILED
-```
-10초 무반응 자동 거절은 `EXPIRED`로 기록합니다. 운전자가 직접 누른 [거절](`REJECTED`)과 구분하려는 것입니다. 폰에는 둘 다 "운전자가 추가하지 않았어요"로 보여 줍니다.
-
-### 4.4 보관 기간
+### 4.3 보관 기간
 
 | 데이터 | 보관 |
 |---|---|
@@ -228,7 +115,7 @@ ACCEPTED → APPLIED  | FAILED
 |---|---|
 | 0 요약, 2.1 기능, 2.2 흐름 | 이 문서 1·2장으로 대체 |
 | 1.1 버전 | Spring WebSocket 추가. FusedLocation·TextToSpeech를 MVP SDK에서 제외 |
-| 1.4, 3.5 DB | 이 문서 4장으로 대체 |
+| 1.4, 3.5 DB | erd.md로 대체 (변경 이유는 이 문서 4장) |
 | 1.5 데이터 흐름 | 폴링 → WebSocket. 기상청 → 환경부 충전소·오피넷·맛집 API |
 | 2.4 예외 | 기획서 6장 예외 표로 대체 (경유지 2개, 목적지 없음, 10초 무반응, `onError`, 5분 끊김, 주행 시작) |
 | 2.8 Q2, Q5~Q8 | Q2: 충전소·맛집 포함으로 답이 바뀜. Q5: 브리핑 삭제. Q6, Q8: 주차·배치도 삭제로 해당 없음. Q7: 5분 무통신 만료로 바뀜 |
