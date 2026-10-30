@@ -1,4 +1,4 @@
-package com.restmate.car
+package com.copilotconnect.car
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text("RestMate", style = MaterialTheme.typography.headlineLarge)
+                        Text("Co-Pilot Connect", style = MaterialTheme.typography.headlineLarge)
                     }
                 }
             }

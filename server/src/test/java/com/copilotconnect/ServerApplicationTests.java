@@ -1,4 +1,4 @@
-package com.restmate;
+package com.copilotconnect;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

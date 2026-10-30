@@ -1,4 +1,4 @@
-package com.restmate.common;
+package com.copilotconnect.common;
 
 import java.util.Map;
 

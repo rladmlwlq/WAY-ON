@@ -21,5 +21,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "RestMateCar"
+rootProject.name = "CopilotConnectCar"
 include(":app")

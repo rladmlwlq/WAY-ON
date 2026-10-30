@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.restmate.car"
+    namespace = "com.copilotconnect.car"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.restmate.car"
+        applicationId = "com.copilotconnect.car"
         // Pleos 출품 앱 필수 요건 (서명 키 로테이션·리니지 지원)
         minSdk = 28
         targetSdk = 35

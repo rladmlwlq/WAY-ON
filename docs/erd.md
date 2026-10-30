@@ -1,4 +1,4 @@
-# RestMate ERD
+# Co-Pilot Connect ERD
 
 > 기준: `server/src/main/resources/db/schema.sql` (design.md 1.4, 3.5)
 > DB: MySQL 8.4, utf8mb4, 시간은 모두 UTC

@@ -1,4 +1,4 @@
--- RestMate 스키마 (design.md 1.4, 3.5 기준)
+-- Co-Pilot Connect 스키마 (design.md 1.4, 3.5 기준)
 -- 시간은 모두 UTC, 좌표는 WGS84 위경도
 
 CREATE TABLE rest_area (
