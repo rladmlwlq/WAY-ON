@@ -15,10 +15,10 @@
 
 ## 1. 저장소 받기
 
-1. Fork에서 **File > Clone** → `https://github.com/rladmlwlq/restmate.git`
+1. Fork에서 **File > Clone** → `https://github.com/rladmlwlq/copilot-connect.git`
 2. 받은 폴더 구조
    ```
-   restmate/
+   copilot-connect/
    ├── car-app/   Android 차량 앱 (Kotlin)
    ├── server/    Spring Boot 서버 (Java)
    └── docs/      설계 문서(design.md), ERD, 이 매뉴얼
