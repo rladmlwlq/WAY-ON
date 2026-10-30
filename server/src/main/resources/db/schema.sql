@@ -1,4 +1,4 @@
--- Co-Pilot Connect 스키마 (docs/erd.md 기준)
+-- WAY:ON 스키마 (docs/erd.md 기준)
 -- 시간은 모두 UTC, 좌표는 WGS84 위경도
 
 CREATE TABLE vehicle (

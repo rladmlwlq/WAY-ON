@@ -57,7 +57,7 @@
 **서버 패키지**는 계층별(controller/service/...)이 아니라 **기능별**로 나눕니다. 근거: 기능이 4개뿐이라 기능별로 묶으면 관련 파일이 한 폴더에 모여 찾기 쉽습니다. 계층은 각 기능 폴더 안에서 클래스 이름으로 구분합니다.
 
 ```
-com.copilotconnect
+com.wayon
 ├── common/          ErrorCode, BusinessException, GlobalExceptionHandler, ErrorResponse, HealthController(/health: 서버·DB 연결 확인)
 ├── auth/            TripTokenInterceptor, TokenHasher, TripRole
 ├── config/          WebConfig (인터셉터 등록), 스케줄 설정
@@ -74,7 +74,7 @@ resources/
 **차량 앱 패키지** (Gradle 모듈 하나)
 
 ```
-com.copilotconnect.car
+com.wayon.car
 ├── state/       ArrivalStateMachine (SDK에 의존하지 않는 순수 Kotlin → 단위 테스트 가능)
 ├── signal/      LocationSource(FusedLocation), ParkingSignal(Vehicle Brake), NaviBridge(NaviHelper), UxRestriction
 ├── api/         ServerApi (Retrofit), dto

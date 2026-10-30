@@ -1,4 +1,4 @@
-package com.copilotconnect.common;
+package com.wayon.common;
 
 import java.util.Map;
 

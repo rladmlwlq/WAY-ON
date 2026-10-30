@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.copilotconnect.car"
+    namespace = "com.wayon.car"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.copilotconnect.car"
+        applicationId = "com.wayon.car"
         // Pleos 출품 앱 필수 요건 (서명 키 로테이션·리니지 지원)
         minSdk = 28
         targetSdk = 35

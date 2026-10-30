@@ -1,4 +1,4 @@
-package com.copilotconnect.car
+package com.wayon.car
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text("Co-Pilot Connect", style = MaterialTheme.typography.headlineLarge)
+                        Text("WAY:ON", style = MaterialTheme.typography.headlineLarge)
                     }
                 }
             }

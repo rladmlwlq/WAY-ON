@@ -1,6 +1,6 @@
-# Co-Pilot Connect ERD
+# WAY:ON ERD
 
-> 기준: `docs/changed.md` 4장 (Co-Pilot Connect 기획서 반영). 변경 이유는 changed.md에 있습니다.
+> 기준: `docs/changed.md` 4장 (WAY:ON 기획서 반영). 변경 이유는 changed.md에 있습니다.
 > DB: MySQL 8.4, utf8mb4, 시간은 모두 UTC
 > DDL: `server/src/main/resources/db/schema.sql` (이 문서와 같은 구조. 테이블·컬럼 한글 이름은 `COMMENT`에 있음)
 

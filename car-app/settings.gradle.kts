@@ -21,5 +21,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CopilotConnectCar"
+rootProject.name = "WayOnCar"
 include(":app")

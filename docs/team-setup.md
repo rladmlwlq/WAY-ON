@@ -15,10 +15,10 @@
 
 ## 1. 저장소 받기
 
-1. Fork에서 **File > Clone** → `https://github.com/rladmlwlq/copilot-connect.git`
+1. Fork에서 **File > Clone** → `https://github.com/rladmlwlq/WAY-ON.git`
 2. 받은 폴더 구조
    ```
-   copilot-connect/
+   WAY-ON/
    ├── car-app/   Android 차량 앱 (Kotlin)
    ├── server/    Spring Boot 서버 (Java)
    └── docs/      설계 문서(design.md), ERD, 이 매뉴얼
@@ -57,7 +57,7 @@
 1. Studio에서 **`car-app` 폴더**를 엽니다 (저장소 루트 아님)
 2. 위에 "Gradle files have changed" 배너가 뜨면 **Sync Now**
 3. 기기를 Pleos AVD로 고르고 ▶ 실행
-4. 차 화면에 **"Co-Pilot Connect"** 가 뜨면 완료
+4. 차 화면에 **"WAY:ON"** 가 뜨면 완료
 
 > `car-app/local.properties`(SDK 경로)는 Studio가 자동으로 만듭니다. git에 올라가지 않으니 손대지 않아도 됩니다.
 
@@ -70,8 +70,8 @@
 | 항목 | 값 |
 |---|---|
 | 주소 | `127.0.0.1:3306` (각자 자기 PC) |
-| DB | `copilot` |
-| 계정 / 비밀번호 | `copilot` / `copilot123` |
+| DB | `wayon` |
+| 계정 / 비밀번호 | `wayon` / `wayon123` |
 
 ### 3-1. 설치
 1. https://dev.mysql.com/downloads/mysql/ 에서 **8.4 LTS** Windows 설치
@@ -80,20 +80,20 @@
 ### 3-2. DB·계정 만들기
 root로 접속(DBeaver 또는 MySQL 콘솔)해서 실행합니다.
 ```sql
-CREATE DATABASE copilot CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-CREATE USER 'copilot'@'localhost' IDENTIFIED BY 'copilot123';
-GRANT ALL PRIVILEGES ON copilot.* TO 'copilot'@'localhost';
+CREATE DATABASE wayon CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE USER 'wayon'@'localhost' IDENTIFIED BY 'wayon123';
+GRANT ALL PRIVILEGES ON wayon.* TO 'wayon'@'localhost';
 ```
 
 ### 3-3. 테이블 만들기
-`copilot` DB에서 아래 파일 내용을 실행합니다.
+`wayon` DB에서 아래 파일 내용을 실행합니다.
 ```
 server/src/main/resources/db/schema.sql
 ```
 테이블 8개(`vehicle`, `passenger`, `connect_code`, `trip`, `trip_passenger`, `waypoint_request`, `rest_area`, `facility`)가 생기면 완료. 구조는 `docs/erd.md` 참고.
 
 ### 3-4. DBeaver 접속
-- Host `127.0.0.1`, Port `3306`, Database `copilot`, 계정 `copilot` / `copilot123`
+- Host `127.0.0.1`, Port `3306`, Database `wayon`, 계정 `wayon` / `wayon123`
 - **"Public Key Retrieval is not allowed"** 오류가 나면: 연결 편집(F4) > **Driver properties** 탭
   - `allowPublicKeyRetrieval` = `true`
   - `useSSL` = `false`
