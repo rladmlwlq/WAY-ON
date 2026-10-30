@@ -90,7 +90,7 @@ GRANT ALL PRIVILEGES ON copilot.* TO 'copilot'@'localhost';
 ```
 server/src/main/resources/db/schema.sql
 ```
-테이블 5개(`rest_area`, `facility`, `trip`, `waypoint_request`, `parking_record`)가 생기면 완료. 구조는 `docs/erd.md` 참고.
+테이블 8개(`vehicle`, `passenger`, `connect_code`, `trip`, `trip_passenger`, `waypoint_request`, `rest_area`, `facility`)가 생기면 완료. 구조는 `docs/erd.md` 참고.
 
 ### 3-4. DBeaver 접속
 - Host `127.0.0.1`, Port `3306`, Database `copilot`, 계정 `copilot` / `copilot123`

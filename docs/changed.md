@@ -2,7 +2,7 @@
 
 > 기준: 「Co-Pilot Connect 기획·설계서」(2026-10-23, Claude Docs). design.md보다 나중에 나온 기획서이므로, 서로 다른 부분은 **이 문서와 기획서가 우선**합니다.
 > design.md 본문은 고치지 않았습니다. 여기 적힌 부분 말고는 design.md를 그대로 따릅니다.
-> 상태: **검토 대기**. ERD는 erd.md에 반영했습니다. schema.sql은 아직 이전 구조입니다.
+> 상태: **검토 대기**. ERD(erd.md)와 schema.sql에 반영했습니다.
 
 ---
 
