@@ -148,6 +148,7 @@ server/src/main/resources/
 | DBeaver "Public Key Retrieval is not allowed" | 3-4 참고 |
 | `/health`가 500 에러 | MySQL이 꺼져 있음. MySQL 서비스 시작 후 재시도 |
 | 서버 빌드 시 JDK 21을 못 찾음 | 4-1 방법으로 Corretto 21 설치 후 IDE 재시작 |
+| "incompatible version (AGP 8.8.2) ... Latest supported version is AGP 7.4.0" | IntelliJ로 `car-app`을 연 경우. 차 앱은 **Android Studio**로 열기 (AGP 버전을 내리지 않기) |
 
 ---
 
