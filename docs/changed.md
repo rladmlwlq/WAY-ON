@@ -1,6 +1,6 @@
 # 설계 변경 사항 (design.md v0.1 → WAY:ON 기획서)
 
-> 기준: 「Co-Pilot Connect 기획·설계서」(2026-10-23, Claude Docs). design.md보다 나중에 나온 기획서이므로, 서로 다른 부분은 **이 문서와 기획서가 우선**합니다.
+> 기준: 「Co-Pilot Connect 기획·설계서」(2026-10-23, Claude Docs, https://claude.ai/artifact/7tLhSNqgq4MngezxN2vYzv). 아래 "N장"은 이 기획서의 장 번호입니다. design.md보다 나중에 나온 기획서이므로, 서로 다른 부분은 **이 문서와 기획서가 우선**합니다.
 > design.md 본문은 고치지 않았습니다. 여기 적힌 부분 말고는 design.md를 그대로 따릅니다.
 > 상태: **검토 대기**. ERD(erd.md)와 schema.sql에 반영했습니다.
 
@@ -19,7 +19,7 @@
 | 서비스 이름 | RestMate (휴게소·도착 동반 앱) | WAY:ON (기획서상 이름 Co-Pilot Connect에서 다시 변경) | 1장 |
 | 장소 종류 | 휴게소만 (Q2) | 휴게소, 전기차 충전소, 맛집 (+ 에너지 제안 때 주유소) | 3장 |
 | 차-폰 통신 (D1) | 서버 중계 + 5초 폴링 | 서버 중계 + **WebSocket (WSS)** | 9장, 13장 |
-| 차량 위치 | FusedLocation SDK | NaviHelper `getCurrentLocationInfo()` (FusedLocation은 준비 중) | 7장 |
+| 차량 위치 | FusedLocation SDK | NaviHelper `getCurrentLocationInfo()`. `LocationSource` 인터페이스로 감싸서 나중에 FusedLocation으로 바꿀 수 있게 함 (D10) | 7장. 기획서의 "FusedLocation 준비 중"은 작성 당시 정보이고, 에뮬레이터 2.1.0에서는 동작 확인 (6장 확인 결과) |
 | 음성 (TTS) | MVP에 포함 | 확장 단계 (SDK 공개 후) | 3장, 10장 |
 | 휴게소 상태 안내 (F4) | MVP | **삭제** | 기획서에 없음 |
 | 주차 위치·배치도 (F5) | MVP | **삭제** | 기획서에 없음 |
@@ -62,11 +62,12 @@
 | D1 차-폰 연결 | 폴링 | **WebSocket**. 차량 앱과 폰이 각각 서버에 WSS로 붙고, 서버가 메시지를 전달합니다. 조회성 API(검색 등)는 HTTPS REST 유지 | design.md 1.1 "쓰지 않는 것"에서 WebSocket 제외. Spring WebSocket(서버), OkHttp WebSocket(차량 앱), 브라우저 기본 WebSocket(폰) |
 | D2 heartbeat | 위치 보고 + 요청 수신을 한 번에 | 위치 보고는 WebSocket 메시지로. 5분 동안 메시지가 없으면 세션 만료 | |
 | D4 인증 | 여행 단위 토큰 2개 | 차량 토큰(설치당 1개) + 동승자 재연결 토큰(동승자당 1개) + 일회용 연결 코드(QR/4자리) | 4장 ERD |
-| D5 후보 계산 | 진행 방향·목적지 근사 | 유지하되 장소 종류가 늘어남. `getCurrentLocationInfo()` 값이 부족하면 서버에서 길찾기 API로 경로 계산 (기획서 12장) | 진행 방향(heading)을 받을 수 있는지 미확인 |
+| D5 후보 계산 | 진행 방향·목적지 근사 | 유지하되 장소 종류가 늘어남. `getCurrentLocationInfo()` 값이 부족하면 서버에서 길찾기 API로 경로 계산 (기획서 12장). 두 SDK 모두 경로 좌표 목록(폴리라인)은 주지 않음 | `heading` 필드는 두 SDK 모두 있음. 정차 중에는 0.0. 주행 중 실제 값과 단위는 미확인 (6장) |
 | D6 상태 머신 | `ArrivalStateMachine` (차량 앱) | **삭제** (F4 삭제) | |
 | D7 경유지 추가 순서 | 서버 선점 → 내비 → 결과 기록 | **유지**. 교체(`removeWaypoint(FIRST)` → `addWaypoint()`)와 목적지 설정(`requestRoute()`)도 같은 순서 | |
 | D8 날씨 규칙 | if 문 4~5개 | **삭제** (F6 브리핑 삭제) | |
 | D9 휴게소 데이터 | SQL seed + 배치도 이미지 | 휴게소는 seed 유지(배치도 없음). 충전소·주유소·맛집은 외부 API를 서버에서 호출하고 DB에 저장하지 않음 | 값이 자주 바뀜(빈 충전기, 유가) |
+| D10 위치 소스 | `LocationSource` = FusedLocation | `LocationSource`를 **인터페이스**로 두고 지금은 NaviHelper로 구현. 나머지 코드는 `CarLocation(lat, lng, heading?, timeMillis)`만 사용 | NaviHelper에만 있는 `address`·`routeId`에 의존하지 않음 (`routeId`는 경로 재탐색마다 바뀜). FusedLocation으로 바꿀 때는 구현체 교체 + 런타임 권한 처리만 추가 |
 
 **design.md에서 그대로 유지하는 것:** 언어·프레임워크·버전(1.1), 기능별 패키지와 계층 책임(1.2, 1.3), 공통 기능(1.6, 단 `TripTokenInterceptor`는 토큰 종류에 맞게 수정), 코딩 규칙(1.8), 토큰 해시 저장, 조건부 UPDATE와 `FOR UPDATE` 잠금(2.6), 선점 후 실행.
 
@@ -114,7 +115,7 @@
 | 섹션 | 영향 |
 |---|---|
 | 0 요약, 2.1 기능, 2.2 흐름 | 이 문서 1·2장으로 대체 |
-| 1.1 버전 | Spring WebSocket 추가. FusedLocation·TextToSpeech를 MVP SDK에서 제외 |
+| 1.1 버전 | Spring WebSocket 추가. TextToSpeech는 MVP에서 쓰지 않음. FusedLocation 의존성은 교체 대비로 유지 (D10) |
 | 1.4, 3.5 DB | erd.md로 대체 (변경 이유는 이 문서 4장) |
 | 1.5 데이터 흐름 | 폴링 → WebSocket. 기상청 → 환경부 충전소·오피넷·맛집 API |
 | 2.4 예외 | 기획서 6장 예외 표로 대체 (경유지 2개, 목적지 없음, 10초 무반응, `onError`, 5분 끊김, 주행 시작) |
@@ -130,7 +131,29 @@
 
 ## 6. 남은 확인 사항
 
-**기획서 12장 공모전 문의 목록**은 그대로 유지합니다 (외부 서버 통신 허용, 주행 중 QR 화면, 내비 음성 유지, heads-up 알림, `getCurrentLocationInfo()` 반환값, `NAVI_ROUTE_SEARCH` 승인, Vehicle SDK 속성명·퍼미션, 에뮬레이터 테스트). 외부 서버 통신이 막히면 WebSocket이든 폴링이든 구조 전체가 안 됩니다.
+**기획서 12장 공모전 문의 목록**은 그대로 유지합니다 (외부 서버 통신 허용, 주행 중 QR 화면, 내비 음성 유지, heads-up 알림, `getCurrentLocationInfo()` 반환값, `NAVI_ROUTE_SEARCH` 승인, Vehicle SDK 속성명·퍼미션, 에뮬레이터 테스트). 외부 서버 통신이 막히면 WebSocket이든 폴링이든 구조 전체가 안 됩니다. `getCurrentLocationInfo()` 반환값은 아래처럼 SDK 소스로 확인했으므로 문의에서 빼도 됩니다. 대신 "에뮬레이터에서 모의 주행하는 방법"을 추가합니다.
+
+### 위치 SDK 확인 결과 (2026-11-04, Pleos Connect Emulator 2.1.0)
+
+확인 코드: `car-app/.../LocationCheck.kt` (임시, Logcat 태그 `WAYON_LOC`). 차가 정차(P, 0km/h)하고 내비 경로가 설정된 상태에서 확인했습니다.
+
+| 항목 | FusedLocation 1.1.3 | NaviHelper 3.0.5 `getCurrentLocationInfo()` |
+|---|---|---|
+| 동작 | `isSupported()=true`, 위치 구독으로 약 1초마다 갱신 | 요청 → `onCurrentLocationInfo` 콜백 (5초마다 요청) |
+| 받는 값 | 위도, 경도, 고도, `heading`, `confidence`, `timestampMillis` | 위도, 경도, `heading`, `address`, `routeId`, `currentRouteIndex` |
+| 에뮬레이터 좌표 | 37.4220, -122.084 (에뮬레이터 기본 GPS = 미국. Extended Controls > Location으로 바꿈) | 37.4127, 127.0947 (수정구 시흥동, 내비 자체 위치) |
+| `heading` | 0.0 | 0.0 |
+| 권한 | `pleos.car.permission.FUSED_LOCATION` (dangerous, 런타임 요청) | `pleos.car.permission.NAVI_ROUTE` (normal) |
+
+**알게 된 것**
+- 에뮬레이터에서는 두 SDK의 위치가 다릅니다. 데모에서는 경로와 맞는 NaviHelper 위치를 씁니다.
+- `routeId`는 경로를 다시 계산할 때마다 바뀝니다. 세션·여행 식별에 쓰지 않습니다.
+- 권한 요청 창이 Pleos 주행 화면(`DrivingViewActivity`)에 가려져 보이지 않았습니다. FusedLocation으로 바꾸려면 권한 요청 시점과 방법을 정해야 합니다.
+
+**아직 확인 못 한 것**
+- 주행 중 좌표·`heading`·`currentRouteIndex`가 바뀌는지. 에뮬레이터 내비에서 모의 주행 버튼을 찾지 못함 (SDK에는 `NaviMode.SIMULATION_GUIDING` 상태가 있음)
+- 목적지(경로)가 없을 때 NaviHelper가 위치를 주는지 (6장 예외 "목적지 없음"과 관련)
+- 실제 차량에서 FusedLocation 동작
 
 **기획서에 없어서 정해야 하는 것:**
 

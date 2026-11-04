@@ -148,7 +148,10 @@ server/src/main/resources/
 | DBeaver "Public Key Retrieval is not allowed" | 3-4 참고 |
 | `/health`가 500 에러 | MySQL이 꺼져 있음. MySQL 서비스 시작 후 재시도 |
 | 서버 빌드 시 JDK 21을 못 찾음 | 4-1 방법으로 Corretto 21 설치 후 IDE 재시작 |
-| "incompatible version (AGP 8.8.2) ... Latest supported version is AGP 7.4.0" | IntelliJ로 `car-app`을 연 경우. 차 앱은 **Android Studio**로 열기 (AGP 버전을 내리지 않기) |
+| "incompatible version (AGP 8.8.2) ... Latest supported version is AGP 7.4.0" | IntelliJ로 `car-app` 폴더 또는 **루트 폴더(`inCarApp`)**를 연 경우. 루트에는 Gradle 설정이 없어서 IntelliJ가 `car-app`까지 자동으로 불러옵니다. 해결: `server`는 IntelliJ, `car-app`은 **Android Studio**로 따로 열기. 루트를 꼭 IntelliJ로 열어야 하면 오른쪽 **Gradle** 창에서 `car-app` 우클릭 > **Unlink Gradle Project** (개인 `.idea` 설정이라 각자 한 번씩). AGP 버전은 내리지 않기 |
+| 앱이 바로 꺼짐, Logcat에 `Waiting for debugger` 후 `ANR ... failed to complete startup` | **Debug(벌레 아이콘)**로 실행했는데 에뮬레이터가 바빠 디버거가 못 붙은 경우. **▶ Run(Shift+F10)**으로 실행. 디버거가 필요하면 Run으로 띄운 뒤 **Attach Debugger to Android Process**. 자주 그러면 AVD RAM을 8GB 이상으로 |
+| 권한 요청 창이 안 보임 (화면이 검거나 그대로) | Pleos 주행 화면에 가려진 경우. adb로 직접 허용: `adb shell pm grant --user 10 com.wayon.car pleos.car.permission.FUSED_LOCATION` |
+| 앱 아이콘이 두 개 보임 | 예전 앱 ID(`com.restmate.car`)로 설치한 앱이 남은 것. 아이콘 길게 눌러 삭제 또는 `adb uninstall --user 10 com.restmate.car` |
 
 ---
 
