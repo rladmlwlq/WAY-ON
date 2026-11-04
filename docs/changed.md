@@ -10,6 +10,8 @@
 
 서비스 이름은 **WAY:ON**입니다. 휴게소 안 안내(접근·진입·주차, 배치도, 주차 위치)와 날씨 브리핑은 MVP에서 뺍니다. 대신 **경로 주변 장소 검색**(휴게소·충전소·맛집), **에너지 부족 자동 제안**, **자동 재연결**, **주행 중 QR 연결**을 넣습니다. 차-폰 통신은 폴링에서 **WebSocket**으로 바꿉니다.
 
+> **2026-11-04 갱신:** 주행 중 QR 연결(F7)은 Pleos 운전 제한 정책상 **불가**(QR sign-in 운전 중 금지) → 정차 중 연결로 바꿈. 동승자 웹은 React + Vite(D3), 충전소는 DB 동기화(D9). 회의 결과: [meetings/2026-11-04-회의결과.md](meetings/2026-11-04-회의결과.md), 외부 API 규격: [api.md](api.md)
+
 ---
 
 ## 1. 무엇이 바뀌나 (요약)
@@ -26,7 +28,7 @@
 | 도착 날씨 브리핑 (F6) | MVP | **삭제** | 기획서에 없음 |
 | 연결 단위 | 여행 1건마다 토큰 2개 | 차량·동승자를 등록해 두고 **자동 재연결** | 3장, 시나리오 C |
 | QR 토큰 | 여행 동안 유효한 폰 토큰 | **일회용 짧은 만료 토큰**, 쓰면 폐기 | 9장 |
-| 주행 중 연결 | 다루지 않음 | 버튼 없는 QR 전용 화면 최대 20초, 대체로 4자리 코드 | 3장, 8장 |
+| 주행 중 연결 | 다루지 않음 | ~~버튼 없는 QR 전용 화면 최대 20초, 대체로 4자리 코드~~ → **주행 중에는 QR을 띄우지 않음.** 정차 중 연결만 (Pleos 운전 제한 정책: QR sign-in 운전 중 금지). 4자리 코드도 sign-in으로 볼지 확인 필요 | 3장, 8장 |
 | 운전자 무반응 | 60초 뒤 만료 | **10초 뒤 자동 거절** | 6장 |
 | 경유지 개수 | 다루지 않음 | 최대 2개. 다 찼으면 1번과 교체할지 물음 | 6장, 7장 |
 | 목적지 없음 | 다루지 않음 | 고른 장소를 `requestRoute()`로 목적지로 설정할지 물음 | 6장 |
@@ -34,7 +36,7 @@
 | 세션 만료 | 최대 24시간 | **통신 없이 5분**이면 만료, 토큰 폐기 | 6장, 9장 |
 | 위치 공유 동의 | 다루지 않음 | 차량과 폰 양쪽에서 동의 후 공유 | 9장 |
 | 에너지 잔량 | 다루지 않음 | Vehicle SDK 배터리·연료 20% 미만 → 동승자 폰에 충전소·주유소 제안 | 3장, 시나리오 E |
-| 외부 데이터 | 한국도로공사, 기상청 | 한국도로공사, 환경부 충전소, 오피넷(주유소), 맛집 출처 미정 | 7장, 13장 |
+| 외부 데이터 | 한국도로공사, 기상청 | 한국도로공사(휴게소), 환경부 충전소, 오피넷(주유소), **Kakao Local(맛집)**, 동승자 웹 지도는 Kakao Maps JS SDK. 키 전부 발급·호출 확인 (2026-11-04, [api.md](api.md)) | 7장, 13장 |
 
 ---
 
@@ -48,7 +50,7 @@
 | F4 | 반영 결과 피드백 | `onRoutingCompleted` / `onError`를 폰에만 표시 | |
 | F5 | 자동 재연결 | 한 번 연결한 동승자는 다음 탑승부터 QR 없이 연결. 차량 앱에서 등록 동승자 확인·해제 | 시나리오 C |
 | F6 | 에너지 기반 자동 제안 | 배터리(EvBattery)·연료(Fuel) 20% 미만 → 동승자 폰에 경로 주변 충전소·주유소. 동승자가 없으면 보내지 않음 | 시나리오 E |
-| F7 | 주행 중 QR 연결 | 동승자가 앱을 열 때만 QR 전용 화면. 연결 즉시 또는 20초 뒤 내비 복귀. 불가하면 알림 속 4자리 코드 | 시나리오 D |
+| ~~F7~~ | ~~주행 중 QR 연결~~ | **보류.** Pleos 운전 제한 정책에서 QR sign-in은 모든 지역 운전 중 금지 (`UX_RESTRICTIONS_NO_SETUP`). 주행 중에는 QR 대신 "정차 후 연결" 안내만. 대체 방법은 회의에서 다시 정함 | 시나리오 D |
 | — | 음성 수락·안내, 쿠폰·주문, 뒷좌석 다중 연결 | 확장 | |
 
 일정이 부족할 때 줄이는 순서(design.md 4.4 대체, 제안): **F7 → F6 → F5**. F1~F4가 핵심 흐름입니다.
@@ -61,12 +63,13 @@
 |---|---|---|---|
 | D1 차-폰 연결 | 폴링 | **WebSocket**. 차량 앱과 폰이 각각 서버에 WSS로 붙고, 서버가 메시지를 전달합니다. 조회성 API(검색 등)는 HTTPS REST 유지 | design.md 1.1 "쓰지 않는 것"에서 WebSocket 제외. Spring WebSocket(서버), OkHttp WebSocket(차량 앱), 브라우저 기본 WebSocket(폰) |
 | D2 heartbeat | 위치 보고 + 요청 수신을 한 번에 | 위치 보고는 WebSocket 메시지로. 5분 동안 메시지가 없으면 세션 만료 | |
+| D3 폰 화면 | 서버가 제공하는 정적 HTML + 순수 JS | **React + Vite**로 개발(`localhost:5173`, API·WS는 8080으로 프록시). 배포는 빌드 결과를 Spring `static/`에 넣어 **서버와 같은 주소** | 실시간 상태(WebSocket, 지도, 요청 상태)가 많아짐. 설치 없이 QR → 브라우저 흐름은 유지. Vercel 분리 배포는 CORS·도메인 관리가 늘어서 안 씀 (2026-11-04 회의) |
 | D4 인증 | 여행 단위 토큰 2개 | 차량 토큰(설치당 1개) + 동승자 재연결 토큰(동승자당 1개) + 일회용 연결 코드(QR/4자리) | 4장 ERD |
 | D5 후보 계산 | 진행 방향·목적지 근사 | 유지하되 장소 종류가 늘어남. `getCurrentLocationInfo()` 값이 부족하면 서버에서 길찾기 API로 경로 계산 (기획서 12장). 두 SDK 모두 경로 좌표 목록(폴리라인)은 주지 않음 | `heading` 필드는 두 SDK 모두 있음. 정차 중에는 0.0. 주행 중 실제 값과 단위는 미확인 (6장) |
 | D6 상태 머신 | `ArrivalStateMachine` (차량 앱) | **삭제** (F4 삭제) | |
 | D7 경유지 추가 순서 | 서버 선점 → 내비 → 결과 기록 | **유지**. 교체(`removeWaypoint(FIRST)` → `addWaypoint()`)와 목적지 설정(`requestRoute()`)도 같은 순서 | |
 | D8 날씨 규칙 | if 문 4~5개 | **삭제** (F6 브리핑 삭제) | |
-| D9 휴게소 데이터 | SQL seed + 배치도 이미지 | 휴게소는 seed 유지(배치도 없음). 충전소·주유소·맛집은 외부 API를 서버에서 호출하고 DB에 저장하지 않음 | 값이 자주 바뀜(빈 충전기, 유가) |
+| D9 휴게소 데이터 | SQL seed + 배치도 이미지 | 휴게소는 도로공사 API 2개로 seed 생성(배치도 없음). **주유소(오피넷)·맛집(카카오)은 반경 검색이 되므로 실시간 호출, DB 저장 안 함.** **충전소는 반경 검색이 안 돼서 DB 동기화** (정보 하루 1번 + 상태 `period=5`로 몇 분마다) — 제안, 동의 필요 | 환경부 API는 지역 코드로만 거름, 전국 53만 행. 오피넷은 하루 300건이라 서버 캐시 필요, 좌표 KATEC. 상세는 [api.md](api.md) |
 | D10 위치 소스 | `LocationSource` = FusedLocation | `LocationSource`를 **인터페이스**로 두고 지금은 NaviHelper로 구현. 나머지 코드는 `CarLocation(lat, lng, heading?, timeMillis)`만 사용 | NaviHelper에만 있는 `address`·`routeId`에 의존하지 않음 (`routeId`는 경로 재탐색마다 바뀜). FusedLocation으로 바꿀 때는 구현체 교체 + 런타임 권한 처리만 추가 |
 
 **design.md에서 그대로 유지하는 것:** 언어·프레임워크·버전(1.1), 기능별 패키지와 계층 책임(1.2, 1.3), 공통 기능(1.6, 단 `TripTokenInterceptor`는 토큰 종류에 맞게 수정), 코딩 규칙(1.8), 토큰 해시 저장, 조건부 UPDATE와 `FOR UPDATE` 잠금(2.6), 선점 후 실행.
@@ -115,7 +118,7 @@
 | 섹션 | 영향 |
 |---|---|
 | 0 요약, 2.1 기능, 2.2 흐름 | 이 문서 1·2장으로 대체 |
-| 1.1 버전 | Spring WebSocket 추가. TextToSpeech는 MVP에서 쓰지 않음. FusedLocation 의존성은 교체 대비로 유지 (D10) |
+| 1.1 버전 | Spring WebSocket 추가. 폰 웹은 React + Vite (D3). TextToSpeech는 MVP에서 쓰지 않음. FusedLocation 의존성은 교체 대비로 유지 (D10). Pleos 문서상 FusedLocation SDK는 아직 "Not Available Yet"(App Market 신청 불가), NaviHelper·Vehicle State는 "Ready to Use" |
 | 1.4, 3.5 DB | erd.md로 대체 (변경 이유는 이 문서 4장) |
 | 1.5 데이터 흐름 | 폴링 → WebSocket. 기상청 → 환경부 충전소·오피넷·맛집 API |
 | 2.4 예외 | 기획서 6장 예외 표로 대체 (경유지 2개, 목적지 없음, 10초 무반응, `onError`, 5분 끊김, 주행 시작) |
@@ -132,6 +135,20 @@
 ## 6. 남은 확인 사항
 
 **기획서 12장 공모전 문의 목록**은 그대로 유지합니다 (외부 서버 통신 허용, 주행 중 QR 화면, 내비 음성 유지, heads-up 알림, `getCurrentLocationInfo()` 반환값, `NAVI_ROUTE_SEARCH` 승인, Vehicle SDK 속성명·퍼미션, 에뮬레이터 테스트). 외부 서버 통신이 막히면 WebSocket이든 폴링이든 구조 전체가 안 됩니다. `getCurrentLocationInfo()` 반환값은 아래처럼 SDK 소스로 확인했으므로 문의에서 빼도 됩니다. 대신 "에뮬레이터에서 모의 주행하는 방법"을 추가합니다.
+
+### Pleos 문서 확인 결과 (2026-11-04)
+
+| 항목 | 결과 | 출처 |
+|---|---|---|
+| 외부 서버 통신 | **허용으로 판단.** 외부 서버를 쓰는 앱을 전제로 규칙을 둠 → 문의 목록에서 뺌 | [앱 제출 가이드](https://document.pleos.ai/en/docs/pleos-only/distribute/app-submission-guide) |
+| 외부 통신 조건 | HTTPS/WSS(TLS 1.2+, 1.3 권장), IP 대신 도메인, 토큰은 URL이 아니라 헤더(폰 브라우저 WebSocket은 헤더를 못 넣으므로 접속 후 첫 메시지로 토큰 전송), 키 하드코딩 금지, 심사·전시 기간 서버 상시 가동 | [앱 보안 가이드](https://document.pleos.ai/en/docs/pleos-only/app-registration-guide/app-security-guide) |
+| 운전 중 QR | **QR sign-in은 모든 지역 운전 중 금지.** DO 선언이 없는 앱은 운전 중 사용 불가 → 우리 앱은 DO 선언 필요 | [운전 제한 정책](https://document.pleos.ai/en/docs/pleos-only/vehicle-app-planning-guide/driving-restiction-policy) |
+| 네트워크 끊김 | 재시도·타임아웃, 최근 데이터 캐시, **오프라인 상태 UI** 필요 | [하드웨어 접근 정책](https://document.pleos.ai/en/docs/pleos-only/vehicle-app-planning-guide/platform-api-architecture) |
+| 토큰 저장 | Android Keystore 등 보안 저장소. 위치 권한 요청 시 이유 설명, 로그의 개인정보 마스킹 | [보안·개인정보 설계](https://document.pleos.ai/en/docs/pleos-only/vehicle-app-planning-guide/security-privacy) |
+| 앱 카테고리 | Mobility Services: "충전소를 경유지로 찾기", "주변 주유소 검색"이 운전 중 예외로 명시됨 | [앱 카테고리](https://document.pleos.ai/en/docs/pleos-only/vehicle-app-planning-guide/app-category) |
+| SDK 신청 | NaviHelper·Vehicle State는 신청 없이 사용. FusedLocation은 아직 신청 불가 | [프로젝트·SDK 접근](https://document.pleos.ai/en/docs/pleos-only/create-my-project) |
+| NaviHelper 추가 정보 | `onDrivingInfo`: 목적지·경유지별 남은 거리·시간. `requestTrip()`→`onTripInfo`: 거리, ETA, 도착 시 예상 배터리. 경로 좌표(폴리라인)는 여전히 없음 | SDK 소스 (navi-data 3.0.4) |
+| 모의 주행 | Virtual Console(에뮬레이터 2.1.0)로 기어·배터리 SOC·주행 가능 거리 조작 가능. **GPS 이동·모의 주행은 없음** → 문의 유지 | [Virtual Console 가이드](https://document.pleos.ai/en/docs/pleos-only/app-test-guide/virtual-console-guide) |
 
 ### 위치 SDK 확인 결과 (2026-11-04, Pleos Connect Emulator 2.1.0)
 
@@ -159,7 +176,7 @@
 
 | # | 질문 | 제안 기본값 |
 |---|---|---|
-| Q1 | 맛집 데이터는 어디서 가져오나요? | 미정. 카카오·네이버 로컬 검색 API 중 선택 필요 |
+| Q1 | 맛집 데이터는 어디서 가져오나요? | **Kakao Local** (2026-11-04 회의). 휴게소 안 식당가인지 고속도로 밖 식당인지는 정해야 함 |
 | Q2 | QR 일회용 토큰과 4자리 코드의 만료 시간은? | QR 2분, 4자리 코드 60초 + 5회 실패 시 폐기 |
 | Q3 | 재연결 토큰은 얼마나 유효한가요? | 마지막 연결 후 90일 |
 | Q4 | 끝난 세션의 경유지 요청 기록을 얼마나 남기나요? | 지표(수락률) 계산용으로 30일 |
