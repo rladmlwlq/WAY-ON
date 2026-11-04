@@ -176,6 +176,42 @@ GET /openapi/business/serviceAreaRoute?key={EX_API_KEY}&type=json&numOfRows=99&p
 
 ---
 
+## 1·2 외 도로공사 API (같은 `EX_API_KEY`, URL만 바꿔 호출)
+
+포털 "고속도로 휴게소현황" 분류. 신청 없이 같은 키로 됨. 규격은 포털 상세 페이지(`https://data.ex.co.kr/openapi/basicinfo/openApiInfoM?apiId={apiId}`) 기준.
+
+**공통 Request:** `key`*, `type`*(json), `numOfRows`, `pageNo`, `routeCd`/`routeNm`, `stdRestCd`/`stdRestNm` (`*` 필수)
+**공통 Response:** `stdRestCd`, `stdRestNm`, `routeCd`, `routeNm`, `svarAddr`, `code`, `message`, `count`, `pageSize` + 아래 고유 필드
+**연결:** `stdRestCd`(`000001` 형식)는 1번 API의 `stdRestCd`와 같은 체계 → seed와 코드로 연결
+
+### 쓰기로 한 4개 (2026-11-04)
+
+| apiId | API | URL (`https://data.ex.co.kr/openapi/...`) | 고유 Request | 고유 Response | 쓸 곳 |
+|---|---|---|---|---|---|
+| 0502 | 휴게소 푸드메뉴현황 | `restinfo/restBestfoodList` | `recommendyn`, `bestfoodyn`, `premiumyn` (구분 필터) | `seq`, `foodNm`(메뉴), `foodCost`(가격), `etc`(설명), `recommendyn`(추천), `bestfoodyn`(베스트), `premiumyn`(프리미엄), `seasonMenu`(`4` 사계절/`S` 여름/`W` 겨울), `foodMaterial`(재료), `app`(하이쉼마루 앱 표출 여부) | 휴게소 도착 모드, 미리 주문 |
+| 0501 | 휴게소 브랜드 매장현황 | `restinfo/restBrandList` | — | `brdCode`, `brdName`(매장), `brdDesc`(비고), `stime`~`etime`(영업시간 `HH:mm`) | 도착 모드 (지금 영업 중인 매장) |
+| 0503 | 휴게소 편의시설 현황 | `restinfo/restConvList` | — | `psCode`, `psName`(시설명), `psDesc`(상세), `stime`~`etime`(운영시간) | 휴게소 카드 아이콘(수유실 등), 필터 |
+| 0504 | 휴게소 편의시설 현황(주유소) | `restinfo/restOilList` | (페이지 파라미터 없음. `routeCd`로 노선 단위 조회) | `psCode`, `psName`(세차장·쉼터·기타 등), `psDesc`(상세. 예: "기본세차 8,000원", "수소충전소 운영"), `stime`~`etime` | 휴게소 주유소의 **부대시설**(세차, 수소충전 등). 유종·가격은 없음 → 가격은 오피넷. 오피넷과 겹치지 않고 보완 관계라 **킵** |
+
+호출 확인: 0501, 0502, 0504 (2026-11-04). 0503은 규격만 확인. 포털 규격과 대조 완료(4개 모두 일치).
+
+- **주유소 코드는 휴게소 코드 + 1** (짝수): `000001` 서울만남(부산)휴게소 ↔ `000002` 서울만남(부산)주유소. 0504 결과를 휴게소에 붙일 때 이 규칙을 씀 (경부선 샘플로 확인, 전 노선은 미확인)
+- 포털 설명에 나오는 매장명·영양정보(0502), 유종·운영사(0504), 매장유형·위치·전화번호(0501)는 **실제 출력에 없음**
+
+### 보류
+
+| apiId | API | URL | 내용 |
+|---|---|---|---|
+| 0505 | 휴게소 이벤트 현황 | `restinfo/restEventList` | 이벤트 제목·내용·기간 |
+| 0506 | 테마휴게소 현황 | `restinfo/restThemeList` | 테마명, 상세 |
+| 0507 | 휴게소 청년창업매장 현황 | `restinfo/restVentureList` | 매장명, 영업시간 |
+| 0508 | 휴게소별 날씨 정보 | `restinfo/restWeatherList` | 필수 `sdate`, `stdHour`. 기온·체감온도·강수·적설·풍속 등. **날씨 기능을 다시 넣으면 기상청 대신 이걸로 가능** |
+| 0509 | 주유소 가격과 고속도로 통행량의 상관성 | `restinfo/restOilpriceList` | 분석용 |
+| — | 고속도로 휴게소 기준정보(상하행·주차) | `restinfo/hiwaySvarInfoList` | 상/하행, 소형·대형·장애인 주차 대수. 주유소 포함 583건 (호출 확인) |
+| — | 휴게소 편의시설 (영업부대시설 기준) | `business/conveniServiceArea` | 2번 API와 비슷한 형식 (호출 확인) |
+
+---
+
 ## 3. 한국환경공단 전기자동차 충전소 정보
 
 | 항목 | 값 |
