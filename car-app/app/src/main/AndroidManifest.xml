@@ -6,6 +6,10 @@
         android:required="true" />
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 내장 내비 조회 (normal) -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+    <!-- FusedLocation 위치 (dangerous: 런타임 요청) -->
+    <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
 
     <application
         android:allowBackup="false"
