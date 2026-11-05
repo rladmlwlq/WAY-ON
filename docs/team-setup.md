@@ -1,7 +1,7 @@
 # 팀원 개발환경 설정 매뉴얼
 
 > 대상: Windows PC에서 처음 저장소를 받는 팀원
-> 순서대로 따라 하면 **차 앱(에뮬레이터)**, **로컬 DB**, **서버**까지 띄울 수 있습니다.
+> 순서대로 따라 하면 **차 앱(에뮬레이터)**, **로컬 DB**, **서버**, **폰 웹**까지 띄울 수 있습니다.
 
 | 구분 | 버전 | 비고 |
 |---|---|---|
@@ -9,6 +9,7 @@
 | Pleos Connect Emulator | **2.1.0** (API 34) | 공모전 지정 |
 | JDK | **21** | 서버 (차 앱은 Studio 내장 JDK 사용) |
 | MySQL | **8.4** | 로컬 DB |
+| Node.js | **26.x LTS** | 폰 웹 (npm 11.x 포함) |
 | Git 클라이언트 | Fork 등 | |
 
 ---
@@ -21,6 +22,7 @@
    WAY-ON/
    ├── car-app/   Android 차량 앱 (Kotlin)
    ├── server/    Spring Boot 서버 (Java)
+   ├── web/       동승자 폰 웹 (React + Vite, 5-2로 만든 뒤 생김)
    └── docs/      설계 문서(way-on.md), 앱 API(app-api.md), 외부 API(api.md), ERD, 이 매뉴얼
    ```
 
@@ -136,9 +138,108 @@ server/src/main/resources/
 ### 4-4. 테스트
 - `gradlew test` — 현재는 **로컬 MySQL이 켜져 있어야** 통과합니다
 
+### 4-5. 외부 API 키
+1. 팀에서 공유받은 키 파일을 **`server/.env`** 로 저장합니다 (파일 이름이 정확히 `.env`)
+2. 들어 있는 키: `EX_API_KEY`, `DATA_GO_KR_KEY`, `OPINET_KEY`, `KAKAO_REST_KEY`, `KAKAO_JS_KEY`, `SEOUL_DATA_KEY`. 규격은 `docs/api.md`
+
+> 아직 서버 코드가 이 파일을 읽지 않습니다. 외부 API 호출 코드를 만들 때 연결합니다.
+
+### 4-6. 폰 웹 연동 (구현할 때 추가)
+아직 서버에 없는 항목입니다. 작업하는 사람이 넣고, 이 매뉴얼에 결과를 적습니다.
+
+| 항목 | 내용 |
+|---|---|
+| WebSocket | `spring-boot-starter-websocket` 추가. 주소는 `/ws` (`docs/app-api.md`) |
+| 허용 Origin | CORS와 WebSocket 모두 `http://localhost:5173`과 Vercel 운영 주소 등록 |
+| 웹 푸시 키 | VAPID 키 쌍을 만들어 `server/.env`에 보관. 공개 키는 서버 API(`GET /api/push/vapid-public-key`)로 웹에 전달 |
+| 배포 | HTTPS 도메인 필요. 배포처는 미정 |
+
 ---
 
-## 5. 자주 막히는 곳
+## 5. 폰 웹 (React + Vite)
+
+### 5-1. Node.js 26 준비
+1. https://nodejs.org 에서 **26.x LTS** 설치
+2. 터미널에서 `node -v`가 `v26`으로 시작하면 완료
+
+> 다른 프로젝트에 다른 Node 버전이 필요하면 nvm-windows 같은 버전 관리 도구로 설치합니다.
+
+| 패키지 | 버전 |
+|---|---|
+| Vite | 8.3.6 |
+| React, React DOM | 19.3.1 |
+| TypeScript | 7.0.2 |
+| `@vitejs/plugin-react` | 6.2.1 |
+| `@types/react`, `@types/react-dom` | 19.3.0 |
+| `@types/node` | 24.19.2 |
+| oxlint | 1.91.0 |
+| Kakao Maps JS SDK | npm 패키지 아님. `<script>`로 로드 (`docs/api.md`) |
+
+정확한 버전은 `web/package-lock.json`으로 맞춥니다.
+
+### 5-2. `web` 폴더 만들기 (처음 한 사람만)
+저장소에 `web/`이 이미 있으면 건너뜁니다. 기능 브랜치에서 저장소 루트 기준으로 실행합니다.
+```
+npm create vite@latest web -- --template react-ts
+cd web
+npm install
+```
+1. `web/package.json`에 추가
+   ```json
+   "engines": { "node": "26.x" }
+   ```
+2. `web/vite.config.ts`의 `defineConfig`에 추가
+   ```ts
+   server: {
+     host: true,
+     proxy: {
+       '/api': 'http://localhost:8080',
+       '/ws': { target: 'ws://localhost:8080', ws: true },
+     },
+   },
+   ```
+3. `web/.env.example`을 아래 내용으로 만듭니다 (이 파일만 커밋)
+   ```
+   VITE_API_URL=
+   VITE_KAKAO_JS_KEY=
+   ```
+4. `web/vercel.json`을 아래 내용으로 만듭니다 (새로고침해도 화면이 열리게 함)
+   ```json
+   { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
+   ```
+5. `web/package-lock.json`도 함께 커밋합니다
+
+### 5-3. 환경변수
+`web/.env.example`을 복사해 `web/.env.local`을 만듭니다.
+
+| 변수 | 로컬 값 | Vercel 값 |
+|---|---|---|
+| `VITE_API_URL` | 비워 둠 (프록시 사용) | 배포한 서버 주소 |
+| `VITE_KAKAO_JS_KEY` | `KAKAO_JS_KEY` 값 | 같은 값 |
+
+> ⚠️ `VITE_`로 시작하는 값은 브라우저에 그대로 노출됩니다. 카카오 REST 키, 도로공사·오피넷 키, VAPID 개인 키를 넣지 마세요.
+
+### 5-4. 실행
+1. 서버를 먼저 띄웁니다 (4-2)
+2. `web` 폴더에서 실행합니다
+   ```
+   npm install
+   npm run dev
+   ```
+3. 브라우저에서 http://localhost:5173 을 엽니다
+
+**폰으로 시험:** PC와 폰을 같은 Wi-Fi에 연결하고 `http://<PC IP>:5173`을 엽니다. 지도를 보려면 이 주소를 카카오 JS SDK 도메인에 등록해야 합니다.
+
+**배포 전 확인:** `npm run build`
+
+### 5-5. Vercel 배포 (한 사람이 한 번)
+1. Vercel에서 저장소를 연결하고 **Root Directory**를 `web`으로 지정
+2. 5-3의 환경변수 등록
+3. 운영 주소를 **카카오 JS SDK 도메인**과 **서버 허용 Origin**(4-6)에 등록. 미리보기 배포는 주소가 바뀌니 운영 주소만 등록
+
+---
+
+## 6. 자주 막히는 곳
 
 | 증상 | 해결 |
 |---|---|
@@ -152,11 +253,15 @@ server/src/main/resources/
 | 앱이 바로 꺼짐, Logcat에 `Waiting for debugger` 후 `ANR ... failed to complete startup` | **Debug(벌레 아이콘)**로 실행했는데 에뮬레이터가 바빠 디버거가 못 붙은 경우. **▶ Run(Shift+F10)**으로 실행. 디버거가 필요하면 Run으로 띄운 뒤 **Attach Debugger to Android Process**. 자주 그러면 AVD RAM을 8GB 이상으로 |
 | 권한 요청 창이 안 보임 (화면이 검거나 그대로) | Pleos 주행 화면에 가려진 경우. adb로 직접 허용: `adb shell pm grant --user 10 com.wayon.car pleos.car.permission.FUSED_LOCATION` |
 | 앱 아이콘이 두 개 보임 | 예전 앱 ID(`com.restmate.car`)로 설치한 앱이 남은 것. 아이콘 길게 눌러 삭제 또는 `adb uninstall --user 10 com.restmate.car` |
+| 웹에서 카카오 지도가 안 뜸 | 지금 주소가 카카오 JS SDK 도메인에 없는 경우. 포트까지 같게 등록 (5-4, 5-5) |
+| 웹에서 `/api` 호출 실패 | 서버가 꺼져 있거나, 로컬 `VITE_API_URL`에 값이 들어 있는 경우. 로컬은 비워 둠 |
+| 배포한 웹에서 서버 호출·WebSocket 실패 | 서버 허용 Origin에 Vercel 운영 주소가 없는 경우 (4-6) |
+| 폰에서 웹 푸시가 안 됨 | `http://<PC IP>`는 HTTPS가 아니라 동작하지 않음. Vercel 주소로 시험. iPhone은 iOS 16.4 이상에서 홈 화면에 추가해야 함 |
 
 ---
 
-## 6. 하지 말 것
-- API 키·서명 키(`*.jks`, `.env`)를 새로 커밋하지 않기 (`.gitignore` 대상)
+## 7. 하지 말 것
+- API 키·서명 키(`*.jks`, `.env`, `.env.local`)를 새로 커밋하지 않기 (`.gitignore` 대상). `.env.example`에는 변수 이름만 적기
 - `develop`에 직접 커밋하지 않기 (main에서 작업 → develop으로 머지)
 - 개인정보가 들어간 참가신청서 작성본을 `docs/`에 올리지 않기
 - 시스템 JAVA_HOME / PATH 변경하지 않기
