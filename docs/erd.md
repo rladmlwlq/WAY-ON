@@ -95,7 +95,7 @@ erDiagram
         VARCHAR(200) address "NULL 가능"
         DECIMAL(9_6) lat
         DECIMAL(9_6) lng
-        VARCHAR(15) action "ADD, REPLACE_FIRST, SET_DEST"
+        VARCHAR(15) action "ADD, SET_DEST"
         VARCHAR(10) status "PENDING, ACCEPTED, APPLIED, REJECTED, FAILED, EXPIRED"
         DATETIME(3) requested_at
         DATETIME(3) decided_at "NULL 가능"
@@ -345,7 +345,7 @@ ACCEPTED → APPLIED  | FAILED
 
 **facility.ps_code**: 도로공사 코드 그대로 ([api.md](api.md) 0503 코드표). **facility.source**: `REST_AREA` | `GAS_STATION`
 
-**waypoint_request.action**: `ADD`(경유지 추가) | `REPLACE_FIRST`(경유지 2개가 찼을 때 1번과 교체) | `SET_DEST`(목적지가 없을 때 목적지로 설정, 또는 공영주차장을 고르면 목적지를 주차장으로 바꿈. way-on.md 3.6)
+**waypoint_request.action**: `ADD`(경유지 추가. 경유지 2개가 찼으면 요청을 받지 않음, 2026-11-05) | `SET_DEST`(목적지가 없을 때 목적지로 설정, 또는 공영주차장을 고르면 목적지를 주차장으로 바꿈. way-on.md 3.6)
 
 ## 인덱스
 
