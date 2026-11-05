@@ -22,6 +22,12 @@ local.properties
 keystore.properties
 .env
 .env.*
+# 팀에 공유받는 키 원본. server/.env로 저장해서 씁니다
+
+# 폰 웹 (Node / Vite / Vercel)
+node_modules/
+dist/
+.vercel/
 
 # 제출용 release APK는 apk/ 폴더에만 둡니다
 *.apk
