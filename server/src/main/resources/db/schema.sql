@@ -17,6 +17,10 @@ CREATE TABLE passenger (
   created_at            DATETIME(3) NOT NULL COMMENT '등록 시각',
   last_connected_at     DATETIME(3) COMMENT '마지막 연결 시각',
   revoked_at            DATETIME(3) COMMENT '해제 시각',              -- NULL이면 유효
+  push_endpoint         VARCHAR(500) COMMENT 'Web Push 구독 endpoint', -- 네 칸 모두 NULL이면 알림 꺼짐
+  push_p256dh           VARCHAR(100) COMMENT 'Web Push 공개 키(p256dh)',
+  push_auth             VARCHAR(50)  COMMENT 'Web Push 인증 값(auth)',
+  push_updated_at       DATETIME(3)  COMMENT '푸시 구독 갱신 시각',
   CONSTRAINT fk_passenger_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicle(id),
   INDEX idx_passenger_vehicle (vehicle_id, revoked_at)
 ) COMMENT '등록 동승자 (자동 재연결)';
@@ -47,7 +51,8 @@ CREATE TABLE trip (
   last_heading           SMALLINT     COMMENT '진행 방향(0~359)',
   last_reported_at       DATETIME(3)  COMMENT '마지막 위치 보고 시각',
   energy_type            VARCHAR(5)   COMMENT '에너지 종류',               -- EV / FUEL
-  energy_pct             TINYINT      COMMENT '배터리·연료 잔량(%)',
+  energy_pct             TINYINT      COMMENT '배터리·연료 잔량(%)',      -- 화면 표시용
+  range_m                INT          COMMENT '주행 가능 거리(m)',          -- Vehicle SDK RANGE_REMAINING. 에너지 제안 판단 기준
   low_energy_alerted_at  DATETIME(3)  COMMENT '에너지 부족 제안 시각',     -- 같은 세션에 반복 제안하지 않게
   created_at             DATETIME(3)  NOT NULL COMMENT '시작 시각',
   last_activity_at       DATETIME(3)  NOT NULL COMMENT '마지막 통신 시각',  -- 5분 무통신이면 만료
@@ -71,7 +76,7 @@ CREATE TABLE waypoint_request (
   id            BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '요청 ID',
   trip_id       BIGINT       NOT NULL COMMENT '세션 ID',
   passenger_id  BIGINT       NOT NULL COMMENT '요청한 동승자 ID',
-  place_type    VARCHAR(15)  NOT NULL COMMENT '장소 종류',     -- REST_AREA / EV_CHARGER / GAS_STATION / RESTAURANT
+  place_type    VARCHAR(15)  NOT NULL COMMENT '장소 종류',     -- REST_AREA / EV_CHARGER / GAS_STATION / RESTAURANT / PARKING
   place_ext_id  VARCHAR(50)  COMMENT '외부 데이터 ID',
   poi_name      VARCHAR(100) NOT NULL COMMENT '장소 이름',     -- 외부 장소는 DB에 없어서 요청 당시 값을 그대로 저장
   address       VARCHAR(200) COMMENT '주소',
@@ -89,24 +94,72 @@ CREATE TABLE waypoint_request (
 
 CREATE TABLE rest_area (
   id               BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '휴게소 ID',
+  std_rest_cd      CHAR(6)      NOT NULL UNIQUE COMMENT '도로공사 휴게소 코드(stdRestCd)', -- 0501~0503과 연결
   name             VARCHAR(50)  NOT NULL COMMENT '휴게소 이름',
+  name_key         VARCHAR(50)  NOT NULL COMMENT '이름 연결 키',          -- 0504·판매순위 파일 연결용. 규칙은 erd.md
   route_name       VARCHAR(50)  NOT NULL COMMENT '노선명',
   direction_label  VARCHAR(20)  NOT NULL COMMENT '방향',                -- 예: 서울방향
   lat              DECIMAL(9,6) NOT NULL COMMENT '위도',
   lng              DECIMAL(9,6) NOT NULL COMMENT '경도',
   travel_bearing   SMALLINT     NOT NULL COMMENT '진입 진행 방향(0~359)', -- 반대 차로 휴게소 제외용
-  updated_at       DATETIME(3)  NOT NULL COMMENT '갱신 시각'
+  updated_at       DATETIME(3)  NOT NULL COMMENT '갱신 시각',
+  INDEX idx_ra_name_key (name_key)
 ) COMMENT '휴게소 (상·하행 각각 1행)';
 
 CREATE TABLE facility (
   id            BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '시설 ID',
-  rest_area_id  BIGINT      NOT NULL COMMENT '휴게소 ID',
-  type          VARCHAR(20) NOT NULL COMMENT '시설 종류',   -- TOILET / FOOD_COURT / STORE / FUEL / EV_CHARGER / NURSING_ROOM
-  name          VARCHAR(50) NOT NULL COMMENT '시설 이름',
-  open_hours    VARCHAR(50) COMMENT '운영 시간',
-  CONSTRAINT fk_facility_ra FOREIGN KEY (rest_area_id) REFERENCES rest_area(id),
-  INDEX idx_facility_ra (rest_area_id)
-) COMMENT '휴게소 시설';
+  rest_area_id  BIGINT       NOT NULL COMMENT '휴게소 ID',
+  source        VARCHAR(10)  NOT NULL COMMENT '출처',          -- REST_AREA(0503 휴게소) / GAS_STATION(0504 휴게소 주유소)
+  ps_code       CHAR(2)      NOT NULL COMMENT '편의시설 코드',  -- 도로공사 psCode 그대로 (01 수면실 … 99 기타, api.md 0503)
+  name          VARCHAR(50)  NOT NULL COMMENT '시설 이름',      -- psName
+  detail        VARCHAR(500) COMMENT '상세',                   -- psDesc. 수소충전은 0504 99 기타의 이 글자로만 알 수 있음
+  open_time     CHAR(5)      COMMENT '운영 시작(HH:mm)',
+  close_time    CHAR(5)      COMMENT '운영 종료(HH:mm, 24:00까지)',
+  CONSTRAINT fk_facility_ra FOREIGN KEY (rest_area_id) REFERENCES rest_area(id) ON DELETE CASCADE,
+  INDEX idx_facility_ra (rest_area_id),
+  INDEX idx_facility_code (ps_code, rest_area_id)
+) COMMENT '휴게소 편의시설 (0503 + 0504)';
+
+CREATE TABLE rest_area_brand (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '매장 ID',
+  rest_area_id  BIGINT       NOT NULL COMMENT '휴게소 ID',
+  brd_code      VARCHAR(5)   NOT NULL COMMENT '브랜드 코드',    -- 같은 브랜드면 휴게소끼리 같은 값
+  brd_name      VARCHAR(50)  NOT NULL COMMENT '브랜드 이름',
+  detail        VARCHAR(200) COMMENT '상세',                   -- brdDesc
+  open_time     CHAR(5)      NOT NULL COMMENT '영업 시작(HH:mm)',
+  close_time    CHAR(5)      NOT NULL COMMENT '영업 종료(HH:mm, 24:00까지)',
+  CONSTRAINT fk_rab_ra FOREIGN KEY (rest_area_id) REFERENCES rest_area(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_rab_ra_brd (rest_area_id, brd_code)
+) COMMENT '휴게소 프랜차이즈 매장 (0501)';
+
+CREATE TABLE rest_area_menu (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '메뉴 ID',
+  rest_area_id  BIGINT       NOT NULL COMMENT '휴게소 ID',
+  seq           VARCHAR(10)  NOT NULL COMMENT '도로공사 메뉴 ID(seq)',
+  food_name     VARCHAR(100) NOT NULL COMMENT '메뉴 이름',
+  name_key      VARCHAR(100) NOT NULL COMMENT '메뉴 이름 연결 키',  -- 판매순위 상품명과 비교. 규칙은 erd.md
+  price         INT          COMMENT '가격(원)',
+  recommended   BOOLEAN      NOT NULL DEFAULT FALSE COMMENT '추천 메뉴',
+  best          BOOLEAN      NOT NULL DEFAULT FALSE COMMENT '베스트푸드',
+  premium       BOOLEAN      NOT NULL DEFAULT FALSE COMMENT '프리미엄',
+  season        CHAR(1)      COMMENT '계절',                   -- 4 사계절 / S 여름 / W 겨울
+  CONSTRAINT fk_ram_ra FOREIGN KEY (rest_area_id) REFERENCES rest_area(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_ram_ra_seq (rest_area_id, seq),
+  INDEX idx_ram_name_key (rest_area_id, name_key)
+) COMMENT '휴게소 메뉴·가격 (0502)';
+
+CREATE TABLE rest_area_top_item (
+  rest_area_id  BIGINT       NOT NULL COMMENT '휴게소 ID',
+  base_month    CHAR(7)      NOT NULL COMMENT '기준 연월(YYYY-MM)',
+  rank_no       TINYINT      NOT NULL COMMENT '순위(1~5)',          -- 편의점을 뺀 뒤 1위부터 다시 매긴 값
+  store_name    VARCHAR(50)  NOT NULL COMMENT '매장 이름',
+  item_name     VARCHAR(100) NOT NULL COMMENT '상품 이름(파일 원문)',
+  display_name  VARCHAR(100) NOT NULL COMMENT '표시 이름',          -- 앞의 (할리스) 같은 괄호 접두어를 뗀 이름
+  menu_id       BIGINT       COMMENT '연결된 메뉴 ID',             -- 0502와 이름이 맞으면 가격을 여기서 가져옴. 약 38%만 있음
+  PRIMARY KEY (rest_area_id, base_month, rank_no),
+  CONSTRAINT fk_rati_ra   FOREIGN KEY (rest_area_id) REFERENCES rest_area(id) ON DELETE CASCADE,
+  CONSTRAINT fk_rati_menu FOREIGN KEY (menu_id) REFERENCES rest_area_menu(id) ON DELETE SET NULL
+) COMMENT '휴게소 먹거리 판매 Top5 (판매순위 파일, 매월)';
 
 CREATE TABLE ev_station (
   id               BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '충전소 ID',
@@ -173,3 +226,31 @@ CREATE TABLE parking_lot (
   UNIQUE KEY uk_pl_source (source, source_key),
   INDEX idx_pl_lat_lng (lat, lng)
 ) COMMENT '주차장 (전국 + 서울, 한 달 1번 동기화)';
+
+CREATE TABLE departure_call (
+  id                BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '출발 알림 ID',
+  vehicle_id        BIGINT      NOT NULL COMMENT '차량 ID',
+  trip_id           BIGINT      NOT NULL COMMENT '세션 ID',          -- 누른 시점의 세션 (만료돼도 기록용으로 남김)
+  status            VARCHAR(10) NOT NULL COMMENT '상태',             -- OPEN / DEPARTED / CANCELLED / EXPIRED
+  eta_min           SMALLINT    COMMENT '목적지까지 남은 시간(분)',   -- 알림 문구용
+  called_at         DATETIME(3) NOT NULL COMMENT '[출발해요] 누른 시각',
+  last_reminded_at  DATETIME(3) COMMENT '마지막 다시 알리기 시각',     -- 1분에 1번까지
+  closed_at         DATETIME(3) COMMENT '종료 시각',
+  CONSTRAINT fk_dc_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicle(id),
+  CONSTRAINT fk_dc_trip    FOREIGN KEY (trip_id) REFERENCES trip(id),
+  INDEX idx_dc_vehicle_status (vehicle_id, status)
+) COMMENT '출발 알림 ([출발해요] 1번 누를 때 1행)';
+
+CREATE TABLE departure_message (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '메시지 ID',
+  call_id       BIGINT      NOT NULL COMMENT '출발 알림 ID',
+  passenger_id  BIGINT      COMMENT '보낸 동승자 ID',                 -- NULL이면 운전자
+  kind          VARCHAR(5)  NOT NULL COMMENT '종류',                  -- QUICK / TEXT
+  quick_code    VARCHAR(10) COMMENT '빠른 답장 코드',                  -- TOILET / IN_LINE / COMING (동승자), TAKE_TIME / HURRY (운전자)
+  body          VARCHAR(40) COMMENT '텍스트',                          -- kind = TEXT일 때만
+  sent_at       DATETIME(3) NOT NULL COMMENT '보낸 시각',              -- 30일 지나면 하루 1번 배치로 삭제
+  CONSTRAINT fk_dm_call      FOREIGN KEY (call_id) REFERENCES departure_call(id) ON DELETE CASCADE,
+  CONSTRAINT fk_dm_passenger FOREIGN KEY (passenger_id) REFERENCES passenger(id),
+  INDEX idx_dm_call (call_id, id),
+  INDEX idx_dm_sent (sent_at)
+) COMMENT '출발 알림 대화 (30일 보관)';

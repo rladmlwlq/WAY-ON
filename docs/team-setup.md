@@ -21,7 +21,7 @@
    WAY-ON/
    ├── car-app/   Android 차량 앱 (Kotlin)
    ├── server/    Spring Boot 서버 (Java)
-   └── docs/      설계 문서(way-on.md), 외부 API(api.md), ERD, 이 매뉴얼
+   └── docs/      설계 문서(way-on.md), 앱 API(app-api.md), 외부 API(api.md), ERD, 이 매뉴얼
    ```
 
 ### 브랜치 규칙

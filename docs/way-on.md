@@ -412,7 +412,7 @@
 
 ## 8. 상이한 부분 (2026-11-05 오후 결정·확인과 이 문서의 차이)
 
-> 이 문서를 쓴 뒤 같은 날 오후에 정하거나 확인한 내용입니다. 근거 문서: [출발해요 기획](meetings/2026-11-05-출발해요-기획.md), [api.md](api.md), [erd.md](erd.md), `changed.md` 2장·6장(Q1~Q12, 지금은 삭제).
+> 이 문서를 쓴 뒤 같은 날 오후에 정하거나 확인한 내용입니다. 근거 문서: [출발해요 기획](2026-11-05-출발해요-기획.md), [api.md](api.md), [erd.md](erd.md), `changed.md` 2장·6장(Q1~Q12, 지금은 삭제).
 > `design.md`, `changed.md`는 2026-11-05에 지웠습니다 (git 기록 `16337c9`에 남아 있음). 아래 내용은 위 본문에 반영할 예정입니다.
 
 ### 8.1 서로 다른 것 (어느 쪽으로 갈지 정해야 함)
@@ -442,7 +442,8 @@
 - **동승자 최대 4명**
 - **충전소 전부 적재** (급속·완속 모두). 5장 5번 "동의"는 끝남
 - 연결 순서: QR 스캔 → 닉네임 → 위치 공유 동의 → 알림 허용 → 연결 완료
-- 아직 대기: iPhone 알림 대응(홈 화면 추가 안내만 할지), 역할 분담, 서버 배포처·도메인
+- iPhone 알림: 지원 범위는 **3.9에 이미 정리됨** (iOS 16.4 이상 + 홈 화면에 추가해야 푸시, 안 하면 페이지가 열려 있을 때만). 남은 결정은 폰 웹에 "홈 화면에 추가" 안내를 넣을지뿐
+- 아직 대기: 역할 분담, 서버 배포처·도메인
 
 ### 8.3 이 문서의 할 일 중 끝난 것
 
@@ -454,6 +455,19 @@
 | 공공 주차장 규격·정확도 (6장) | 끝남. 서울은 서울시 API로 보강, 좌표 없는 곳은 카카오 주소 검색으로 변환 (api.md 8·9) |
 | erd: 충전소 테이블, "충전소도 그때그때 조회" 문장 (7장) | 끝남. `ev_station`, `ev_charger`, `parking_lot` 추가 |
 | api.md: 카카오모빌리티, 공공 주차장 (7장) | 끝남. api.md는 외부 API 11개 모두 Request·Response·예시·실패 응답 정리 |
+| Vehicle SDK 주행 가능 거리·연료·배터리·기어 속성과 퍼미션 (6장, S3) | **소스로 확인 끝남 (Vehicle 2.3.2).** 값이 실제로 나오는지는 에뮬레이터에서 확인 필요 (차량 앱 첫 화면에 임시로 표시, `VehicleCheck.kt`). 아래 표 |
+| erd.md·schema.sql 남은 작업 (7장, 8.5) | 끝남 (8.5) |
+| 차 ⇄ 서버 ⇄ 폰 API | **초안 작성** → [app-api.md](app-api.md). REST·WebSocket 메시지, 오류 코드, 기준값 |
+
+**Vehicle SDK 확인 결과** (모두 normal 권한이라 매니페스트 선언만 하면 됨)
+
+| 값 | API | 단위 | 권한 | 비고 |
+|---|---|---|---|---|
+| 주행 가능 거리 | `Odometer.getRangeRemainingDistance()` / `registerRangeRemainingListener()` | m | `pleos.car.permission.CAR_DRIVE` | Pleos가 deprecated(WARNING)로 표시하고 Google `RANGE_REMAINING` 속성을 쓰라고 안내. 내부는 같은 속성을 읽음. 먼저 이걸로 쓰고, 값이 안 나오면 Android `CarPropertyManager`로 바꿈 |
+| 연료 % | `Fuel.getFuelPercent()` / `registerFuelPercent()` | % | `pleos.car.permission.CAR_ENERGY` | |
+| 배터리 % | `EvBattery.getEvBatteryStateOfCharge()` / `registerEvBatteryStateOfCharge()` | % | `pleos.car.permission.CAR_ENERGY` | |
+| 기어 | `Gear.getCurrentGearSelectionState()` / `registerGearSelection()` | `GEAR_PARK` 등 | `pleos.car.permission.CAR_DRIVE` | S3. P 판단을 `CarUxRestrictions` 대신 이걸로도 할 수 있음 |
+| 연료 종류 (연료차/전기차) | **공개 API 없음** | | | 연료 %와 배터리 % 중 값이 나오는 쪽으로 판단 |
 
 ### 8.4 확인하다 바뀐 사실
 
@@ -462,10 +476,11 @@
 - 0503에 화장실 항목은 없음
 - 서울시 주차장은 노외 주차장 대부분이 좌표 없음, 총 주차면 1 이하인 더미 데이터 310곳
 
-### 8.5 남은 erd.md·schema.sql 작업
+### 8.5 erd.md·schema.sql 작업 (끝남, 2026-11-05)
 
-- `rest_area.std_rest_cd` (도로공사 코드)
-- 휴게소 메뉴(0502)·매장(0501)·Top5 테이블, `facility.type`을 0503 코드로
-- `passenger` 푸시 구독 컬럼, 출발해요 `departure_call`·`departure_message` (출발해요 기획 9장)
-- `trip`의 주행 가능 거리 컬럼 (3.10)
-- `waypoint_request.place_type`에 주차장(`PARKING`) 추가
+- `rest_area.std_rest_cd`(도로공사 코드), `rest_area.name_key`(이름 연결 키, 만드는 규칙은 erd.md)
+- 새 테이블: `rest_area_brand`(0501), `rest_area_menu`(0502), `rest_area_top_item`(판매순위 Top5)
+- `facility`: `type` 임의 값 대신 도로공사 `ps_code`, 0504 주유소 시설은 `source = GAS_STATION`으로 같이 넣음. 화장실은 넣지 않음
+- `passenger` 푸시 구독 컬럼 4개, 새 테이블 `departure_call`·`departure_message` (출발해요 기획 9장)
+- `trip.range_m`(주행 가능 거리, m) 추가. `energy_pct`는 화면 표시용으로 남김
+- `waypoint_request.place_type`에 `PARKING` 추가
