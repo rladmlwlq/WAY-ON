@@ -92,9 +92,31 @@ GRANT ALL PRIVILEGES ON wayon.* TO 'wayon'@'localhost';
 ```
 server/src/main/resources/db/schema.sql
 ```
-테이블 8개(`vehicle`, `passenger`, `connect_code`, `trip`, `trip_passenger`, `waypoint_request`, `rest_area`, `facility`)가 생기면 완료. 구조는 `docs/erd.md` 참고.
+테이블 16개가 생기면 완료. 구조는 `docs/erd.md` 참고.
 
-### 3-4. DBeaver 접속
+- 로컬 DB는 각자 것이라 **지우고 다시 만들어도 됩니다.** `schema.sql`이 바뀌면 테이블을 모두 지우고 이 파일을 다시 실행합니다.
+- 테이블 변경은 `schema.sql`로, 데이터 공유는 **CSV**로 git에 올립니다.
+
+### 3-4. 휴게소 데이터 넣기
+`server` 폴더에서 실행합니다. git에 있는 CSV(`server/src/main/resources/db/seed/`)를 로컬 DB에 넣고 서버가 저절로 꺼집니다. 키가 필요 없습니다.
+```
+gradlew bootRun --args="--wayon.seed=rest-area-load"
+```
+휴게소 199곳, 편의시설 1,259개, 매장 477개, 메뉴 5,542개, 판매 Top5 883행(휴게소 181곳)이 들어가면 완료입니다.
+
+도로공사 데이터를 새로 받을 때만 아래를 씁니다 (`server/.env`에 `EX_API_KEY` 필요). API에서 받아 CSV를 다시 만들고 DB에도 넣습니다. 바뀐 CSV는 커밋합니다.
+```
+gradlew bootRun --args="--wayon.seed=rest-area-fetch"
+```
+**판매순위 Top5 (매달):** 도로공사 데이터 포털에서 받은 파일(이름은 `.zip`이지만 실제로는 gzip)을 그대로 넣습니다. 같은 달은 바뀌고 다른 달은 남습니다. 바뀐 `rest_area_top_item.csv`를 커밋합니다.
+```
+gradlew bootRun --args="--wayon.seed=top5-import --wayon.seed.file=C:/받은/파일.zip"
+```
+경로에 한글이 있으면 실패할 수 있으니 영문 경로로 복사해서 넣습니다.
+
+시연 구간처럼 반대 차로 판단이 정확해야 하는 휴게소는 `rest_area_bearing_override.csv`에 방위각을 직접 적습니다 (`docs/erd.md` 휴게소 적재 규칙).
+
+### 3-5. DBeaver 접속
 - Host `127.0.0.1`, Port `3306`, Database `wayon`, 계정 `wayon` / `wayon123`
 - **"Public Key Retrieval is not allowed"** 오류가 나면: 연결 편집(F4) > **Driver properties** 탭
   - `allowPublicKeyRetrieval` = `true`
@@ -246,7 +268,7 @@ npm install
 | Create device에 Pleos Connect가 안 보임 | 이미지 설치 후 **Android Studio 재시작** |
 | ▶ 실행 버튼이 회색 | "Gradle files have changed" 배너의 **Sync Now** |
 | 이미지 설치 실패 (공간 부족) | C 여유 공간 확보 또는 SDK 위치를 D로 변경. 실패 잔여물은 `Sdk\.temp` 폴더 |
-| DBeaver "Public Key Retrieval is not allowed" | 3-4 참고 |
+| DBeaver "Public Key Retrieval is not allowed" | 3-5 참고 |
 | `/health`가 500 에러 | MySQL이 꺼져 있음. MySQL 서비스 시작 후 재시도 |
 | 서버 빌드 시 JDK 21을 못 찾음 | 4-1 방법으로 Corretto 21 설치 후 IDE 재시작 |
 | "incompatible version (AGP 8.8.2) ... Latest supported version is AGP 7.4.0" | IntelliJ로 `car-app` 폴더 또는 **루트 폴더(`inCarApp`)**를 연 경우. 루트에는 Gradle 설정이 없어서 IntelliJ가 `car-app`까지 자동으로 불러옵니다. 해결: `server`는 IntelliJ, `car-app`은 **Android Studio**로 따로 열기. 루트를 꼭 IntelliJ로 열어야 하면 오른쪽 **Gradle** 창에서 `car-app` 우클릭 > **Unlink Gradle Project** (개인 `.idea` 설정이라 각자 한 번씩). AGP 버전은 내리지 않기 |
