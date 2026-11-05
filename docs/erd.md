@@ -1,6 +1,6 @@
 # WAY:ON ERD
 
-> 기준: `docs/changed.md` 4장 (WAY:ON 기획서 반영). 변경 이유는 changed.md에 있습니다.
+> 기준: [way-on.md](way-on.md) (통합 설계). 2026-11-05 추가·변경 이유는 way-on.md 8장
 > DB: MySQL 8.4, utf8mb4, 시간은 모두 UTC
 > DDL: `server/src/main/resources/db/schema.sql` (이 문서와 같은 구조. 테이블·컬럼 한글 이름은 `COMMENT`에 있음)
 
@@ -14,6 +14,7 @@ erDiagram
     TRIP ||--o{ WAYPOINT_REQUEST : "요청을 받음"
     PASSENGER ||--o{ WAYPOINT_REQUEST : "요청함"
     REST_AREA ||--o{ FACILITY : "시설을 가짐"
+    EV_STATION ||--o{ EV_CHARGER : "충전기"
 
     VEHICLE {
         BIGINT id PK
@@ -27,7 +28,7 @@ erDiagram
         BIGINT id PK
         BIGINT vehicle_id FK
         CHAR(64) reconnect_token_hash UK "재연결 토큰 SHA-256"
-        VARCHAR(30) label "차량 앱 목록 표시용, NULL 가능"
+        VARCHAR(10) nickname "닉네임, 연결 때 필수. 같은 차 안에서 겹치지 않음"
         DATETIME(3) created_at
         DATETIME(3) last_connected_at "NULL 가능"
         DATETIME(3) revoked_at "해제 시각, NULL이면 유효"
@@ -106,6 +107,66 @@ erDiagram
         VARCHAR(50) name
         VARCHAR(50) open_hours "NULL 가능"
     }
+
+    EV_STATION {
+        BIGINT id PK
+        VARCHAR(20) stat_id UK "환경부 statId"
+        VARCHAR(100) name
+        VARCHAR(200) addr
+        VARCHAR(200) location_detail "NULL 가능"
+        DECIMAL(9_6) lat
+        DECIMAL(9_6) lng
+        VARCHAR(100) use_time "NULL 가능"
+        VARCHAR(50) operator_name
+        VARCHAR(30) operator_phone "NULL 가능"
+        BOOLEAN parking_free "NULL 가능"
+        BOOLEAN access_limited "외부인 이용 제한"
+        VARCHAR(200) limit_detail "NULL 가능"
+        CHAR(2) zcode "시도 코드"
+        DATETIME(3) synced_at
+    }
+
+    EV_CHARGER {
+        BIGINT id PK
+        BIGINT station_id FK
+        VARCHAR(10) chger_id "충전소 안 번호"
+        CHAR(2) chger_type "환경부 코드"
+        SMALLINT output_kw "NULL 가능"
+        TINYINT stat "1 통신이상, 2 사용가능, 3 충전중, 4 운영중지, 5 점검중, 9 미확인"
+        DATETIME(3) stat_updated_at "NULL 가능"
+        DATETIME(3) synced_at
+    }
+
+    PARKING_LOT {
+        BIGINT id PK
+        VARCHAR(10) source "NATIONAL, SEOUL"
+        VARCHAR(40) source_key "출처별 ID"
+        VARCHAR(100) name
+        VARCHAR(10) kind "OFF_STREET, ON_STREET, ATTACHED"
+        VARCHAR(200) addr
+        DECIMAL(9_6) lat
+        DECIMAL(9_6) lng
+        VARCHAR(10) coord_source "API, GEOCODE"
+        INT total_spaces "NULL 가능"
+        VARCHAR(5) fee_type "FREE, PAID, MIXED"
+        SMALLINT basic_min "NULL 가능"
+        INT basic_fee "NULL 가능"
+        SMALLINT add_min "NULL 가능"
+        INT add_fee "NULL 가능"
+        INT day_max_fee "NULL 가능"
+        INT fee_1h "정렬용 1시간 요금, 계산 불가면 NULL"
+        CHAR(4) weekday_open "HHMM, NULL 가능"
+        CHAR(4) weekday_close "HHMM, 2400까지"
+        CHAR(4) sat_open
+        CHAR(4) sat_close
+        CHAR(4) holiday_open
+        CHAR(4) holiday_close
+        VARCHAR(30) phone "NULL 가능"
+        INT now_parked "실시간 주차 대수, 서울 일부만"
+        DATETIME(3) now_updated_at "NULL 가능"
+        DATE ref_date "출처 데이터 기준일, NULL 가능"
+        DATETIME(3) synced_at
+    }
 ```
 
 > Mermaid 문법상 타입 안의 쉼표를 쓸 수 없어서 `DECIMAL(9,6)`을 `DECIMAL(9_6)`으로 표기했습니다.
@@ -122,8 +183,24 @@ erDiagram
 | `waypoint_request` | 동승자의 경유지 요청 1건과 운전자 결정 | 운행 데이터. 요청 당시 장소 정보를 그대로 저장 |
 | `rest_area` | 휴게소 1곳의 한 방향 (상·하행은 각각 1행) | 기준 데이터. seed.sql로 입력, 서버 시작 때 메모리에 올림 |
 | `facility` | 휴게소 안 시설 1개 | 기준 데이터. "충전 가능한 휴게소" 같은 필터용 |
+| `ev_station` | 전기차 충전소 1곳 | 동기화 데이터. 환경부 `getChargerInfo`를 **하루 1번** 전체 반영 ([api.md](api.md) 3장) |
+| `ev_charger` | 충전소 안 충전기 1대와 현재 상태 | 동기화 데이터. 정보는 하루 1번, `stat`은 `getChargerStatus?period=5`로 **5분마다** 바뀐 것만 갱신 |
+| `parking_lot` | 주차장 1곳 | 동기화 데이터. 전국 표준데이터 + 서울시 데이터를 합쳐 **한 달 1번** 반영, 서울 실시간 대수는 5분마다 ([api.md](api.md) 7·8장) |
 
-충전소·주유소·맛집은 외부 API(환경부 충전소, 오피넷 등)에서 그때그때 조회하고 DB에 저장하지 않습니다. 빈 충전기, 유가처럼 자주 바뀌는 값이라서입니다.
+**DB에 넣는 것과 안 넣는 것** (way-on.md 3.4, 8.1)
+- 넣음: 휴게소(seed), **충전소, 주차장**. 외부 API가 좌표·반경 검색을 못 해서, 우리 DB에서 좌표로 근처를 찾습니다.
+- 안 넣음: 주유소(오피넷), 맛집(카카오). 반경 검색이 되므로 그때그때 호출합니다 (오피넷은 하루 300건이라 서버 메모리 캐시).
+
+**근처 찾기 쿼리** (충전소·주차장 공통): 중심 좌표 ± 반경만큼의 사각형으로 `idx_*_lat_lng`를 먼저 타고, 남은 행만 실제 거리를 계산해 정렬합니다. 행 수가 수십만 이하라 공간 인덱스(SPATIAL)는 쓰지 않습니다.
+
+**`parking_lot` 적재 규칙**
+- `source_key`: 전국은 `insttCode:prkplceNo` (번호만으로는 기관끼리 겹침), 서울은 `PKLT_CD`
+- 좌표가 없으면 카카오 주소 검색으로 채우고 `coord_source = GEOCODE`. 그래도 없으면 넣지 않음
+- 서울 노상 주차장은 한 코드에 구간별 행이 여러 개 → 첫 행 좌표 1개만 사용
+- 버스전용·거주자 전용 주차장은 넣지 않음 (서울 `OPER_SE_NM`)
+- 서울 중복: 서울시 데이터를 기준으로 하고, 전국 데이터의 서울 행은 **이름이 같고 100m 안**이면 버림
+- 서울 `GetParkInfo`는 토요일이 아니라 "주말" 시간이라 `sat_*`, `holiday_*` 칸에 주말·공휴일 값을 넣음
+- `fee_1h`: 무료면 0. 유료면 `basic_fee` + 남은 시간을 `add_min` 단위로 올림해 `add_fee`를 곱한 값, `day_max_fee`가 있으면 그 이하로. 값이 모자라 계산이 안 되면 NULL → "싼 순"에서 맨 뒤
 
 ## 관계
 
@@ -136,17 +213,24 @@ erDiagram
 | trip → waypoint_request | 1 : N | 세션 중 요청은 여러 번. 대기(PENDING)는 동시에 1건만 (새 요청이 오면 이전 것은 EXPIRED) |
 | passenger → waypoint_request | 1 : N | 요청한 동승자 |
 | rest_area → facility | 1 : N | 휴게소 하나에 시설 여러 개 |
+| ev_station → ev_charger | 1 : N | 충전소 하나에 충전기 여러 대. 상태 갱신은 `stat_id` + `chger_id`로 찾음 |
+
+`ev_station`, `parking_lot`은 다른 테이블과 FK로 묶지 않습니다. 동승자가 고르면 `waypoint_request`에 장소 정보를 복사해 저장하므로 (`place_type`, `place_ext_id`), 동기화로 행이 지워져도 요청 기록은 깨지지 않습니다.
 
 ## 상태 값
 
 **trip.status**: `ACTIVE` → `ENDED`(차량 앱이 종료) | `EXPIRED`(5분 무통신)
 
-**waypoint_request.status** (허용 전이, design.md 3.4)
+**waypoint_request.status** (허용 전이)
 ```
 PENDING  → ACCEPTED | REJECTED | EXPIRED
 ACCEPTED → APPLIED  | FAILED
 ```
 10초 무반응 자동 거절은 `EXPIRED`, 운전자가 직접 누른 [거절]은 `REJECTED`로 구분합니다.
+
+**ev_charger.stat**: 환경부 코드 그대로. `2`(충전대기)만 "사용 가능"으로 셉니다. `delYn=Y`로 오는 충전기는 행을 지웁니다.
+
+**parking_lot.kind**: `OFF_STREET`(노외) | `ON_STREET`(노상) | `ATTACHED`(부설). **fee_type**: `FREE` | `PAID` | `MIXED`(혼합)
 
 **waypoint_request.action**: `ADD`(경유지 추가) | `REPLACE_FIRST`(경유지 2개가 찼을 때 1번과 교체) | `SET_DEST`(목적지가 없을 때 목적지로 설정)
 
@@ -163,8 +247,16 @@ ACCEPTED → APPLIED  | FAILED
 | trip | `idx_trip_activity (status, last_activity_at)` | 5분 무통신 세션 만료 |
 | waypoint_request | `idx_wr_trip_status (trip_id, status)` | 세션의 대기 요청 조회 |
 | facility | `idx_facility_ra (rest_area_id)` | 휴게소별 시설 조회 |
+| ev_station | `stat_id` UNIQUE | 동기화할 때 충전소 찾기 |
+| ev_station | `idx_evs_lat_lng (lat, lng)` | 근처 충전소 |
+| ev_charger | `uk_evc_station_chger (station_id, chger_id)` UNIQUE | 상태 갱신할 때 충전기 찾기 |
+| ev_charger | `idx_evc_station_stat (station_id, stat)` | 충전소별 사용 가능 대수 세기 |
+| parking_lot | `uk_pl_source (source, source_key)` UNIQUE | 동기화할 때 주차장 찾기, 서울 실시간 대수 갱신 |
+| parking_lot | `idx_pl_lat_lng (lat, lng)` | 근처 주차장 |
 
 ## 정해지지 않은 것
 
-- 4자리 코드는 1만 개뿐이라 차량끼리 겹칠 수 있습니다. 동시에 유효한 PIN이 겹치지 않게 발급하거나, 폰에서 차량을 먼저 고르게 해야 합니다 (changed.md 6장 Q2와 함께 결정).
-- `passenger`, 끝난 세션의 `waypoint_request` 보관 기간 (changed.md 6장 Q3, Q4).
+- 4자리 코드는 1만 개뿐이라 차량끼리 겹칠 수 있습니다. 동시에 유효한 PIN이 겹치지 않게 발급하거나, 폰에서 차량을 먼저 고르게 해야 합니다 (QR·4자리 코드 만료와 함께 결정).
+- `passenger`, 끝난 세션의 `waypoint_request` 보관 기간 (재연결 토큰은 마지막 연결 후 90일로 결정, 2026-11-05. 끝난 세션의 요청 기록은 way-on.md 5장 9번).
+- `passenger.nickname`이 같은 차 안에서 겹치지 않게 하는 건 **서비스에서** 확인합니다 (연결 때 `vehicle` 행을 `FOR UPDATE`로 잠그고 유효한 동승자 닉네임과 비교). 해제된 동승자(`revoked_at` 있음)와는 겹쳐도 되므로 UNIQUE 인덱스로는 못 막습니다. 2026-11-05 결정: 닉네임은 연결 때 필수 ([출발해요 기획](meetings/2026-11-05-출발해요-기획.md) 2장).
+- 주차장 실시간 빈자리를 서울 밖에서도 보여 줄지 (교통안전공단 API 15099883 신청 필요)
