@@ -26,6 +26,10 @@ class MainActivity : ComponentActivity() {
     private var fusedText by mutableStateOf("확인 중…")
     private var naviText by mutableStateOf("확인 중…")
 
+    // 임시: 에너지 제안용 차량 값 확인 (VehicleCheck.kt 참고)
+    private lateinit var vehicleCheck: VehicleCheck
+    private var vehicleText by mutableStateOf("확인 중…")
+
     private val fusedPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) locationCheck.startFused() else fusedText = "[Fused] 권한 거부됨"
@@ -41,6 +45,9 @@ class MainActivity : ComponentActivity() {
         )
         startLocationCheck()
 
+        vehicleCheck = VehicleCheck(context = this, onText = { vehicleText = it })
+        vehicleCheck.start()
+
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -53,6 +60,8 @@ class MainActivity : ComponentActivity() {
                         Text(fusedText)
                         Text("NaviHelper getCurrentLocationInfo()", style = MaterialTheme.typography.titleMedium)
                         Text(naviText)
+                        Text("Vehicle (에너지 제안)", style = MaterialTheme.typography.titleMedium)
+                        Text(vehicleText)
                     }
                 }
             }
@@ -73,6 +82,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         locationCheck.stop()
+        vehicleCheck.stop()
         super.onDestroy()
     }
 }

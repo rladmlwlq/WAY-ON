@@ -10,6 +10,10 @@
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
     <!-- FusedLocation 위치 (dangerous: 런타임 요청) -->
     <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
+    <!-- 주행 가능 거리·기어 (normal) -->
+    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
+    <!-- 연료·배터리 % (normal) -->
+    <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
 
     <application
         android:allowBackup="false"
