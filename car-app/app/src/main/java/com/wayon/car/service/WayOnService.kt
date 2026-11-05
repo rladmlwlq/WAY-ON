@@ -3,19 +3,43 @@ package com.wayon.car.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.os.Binder
 import android.os.Build
+import android.os.IBinder
 import androidx.lifecycle.LifecycleService
+import com.wayon.car.car.CarSignals
 
 /**
  * 앱의 두뇌 (car-app-design.md 2장). 화면을 닫아도 서버 통신과 차량 값 읽기를 계속한다.
- * 지금은 포그라운드로 뜨기만 하는 뼈대. ServerClient, CarSignals, NaviBridge, Rules, Voice를 여기에 붙인다.
+ * 지금은 CarSignals(기어·주행 가능 거리·연료·배터리)만 붙어 있다. ServerClient, NaviBridge, Rules, Voice를 이어서 붙인다.
  */
 class WayOnService : LifecycleService() {
+
+    lateinit var carSignals: CarSignals
+        private set
+
+    inner class LocalBinder : Binder() {
+        val service: WayOnService get() = this@WayOnService
+    }
+
+    private val binder = LocalBinder()
 
     override fun onCreate() {
         super.onCreate()
         startAsForeground()
+        carSignals = CarSignals(applicationContext).also { it.start() }
+    }
+
+    override fun onBind(intent: Intent): IBinder {
+        super.onBind(intent)
+        return binder
+    }
+
+    override fun onDestroy() {
+        carSignals.stop()
+        super.onDestroy()
     }
 
     private fun startAsForeground() {

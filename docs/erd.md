@@ -111,14 +111,14 @@ erDiagram
         VARCHAR(20) direction_label "예: 서울방향"
         DECIMAL(9_6) lat
         DECIMAL(9_6) lng
-        SMALLINT travel_bearing "진입 차량 진행 방향 0~359, 반대 차로 제외용"
+        SMALLINT travel_bearing "진입 차량 진행 방향 0~359, 반대 차로 제외용. NULL = 양방향"
         DATETIME(3) updated_at
     }
 
     FACILITY {
         BIGINT id PK
         BIGINT rest_area_id FK
-        VARCHAR(10) source "REST_AREA(0503), GAS_STATION(0504)"
+        VARCHAR(12) source "REST_AREA(0503), GAS_STATION(0504)"
         CHAR(2) ps_code "도로공사 psCode 01~15, 99"
         VARCHAR(50) name "psName"
         VARCHAR(500) detail "psDesc, NULL 가능"
@@ -131,7 +131,7 @@ erDiagram
         BIGINT rest_area_id FK
         VARCHAR(5) brd_code "브랜드 코드"
         VARCHAR(50) brd_name
-        VARCHAR(200) detail "brdDesc, NULL 가능"
+        VARCHAR(500) detail "brdDesc, NULL 가능"
         CHAR(5) open_time "HH:mm"
         CHAR(5) close_time "HH:mm, 24:00까지"
     }
@@ -280,6 +280,9 @@ erDiagram
 - `fee_1h`: 무료면 0. 유료면 `basic_fee` + 남은 시간을 `add_min` 단위로 올림해 `add_fee`를 곱한 값, `day_max_fee`가 있으면 그 이하로. 값이 모자라 계산이 안 되면 NULL → "싼 순"에서 맨 뒤
 
 **휴게소 데이터 적재 규칙** (seed 만들 때 한 번, Top5만 매달)
+- 적재 코드: 서버 `com.wayon.seed` (`RestAreaSeeder`). 결과는 `server/src/main/resources/db/seed/*.csv`로 git에 올리고, 각자 로컬 DB에는 CSV로 넣습니다 (team-setup.md 3-3).
+- 쉼터 4곳(이름에 `쉼터`)은 뺍니다. 방향(`direction_label`)은 **이름 괄호 안을 먼저** 쓰고, 괄호가 없으면 2번 API `direction`을 씁니다. 2번 API 방향이 이름과 반대인 휴게소가 있습니다 (예: 충주(양평)). 둘 다 없으면 `양방향`.
+- `travel_bearing`: 휴게소에서 **방향 도시(이름 괄호 안) 쪽으로 향하는 방위각**. 도시 좌표표는 `TravelBearing.CITIES`. 상·하행 휴게소 위치로 구하는 방법은 두 휴게소가 길을 따라 앞뒤로 어긋나 있어 156곳 중 37곳이 틀려서 쓰지 않습니다 (2026-11-05). 양방향 공용(기흥복합)과 도시를 모르는 곳(양북임시(상)·(하))은 `NULL` → 반대 차로 판단 없이 보여 줍니다. 시연 구간처럼 정확해야 하는 곳은 `rest_area_bearing_override.csv`(`std_rest_cd`, `travel_bearing`, `memo`)에 적으면 적재할 때 덮어씁니다.
 - 0501·0502·0503은 `std_rest_cd`로 `rest_area`에 붙입니다.
 - 0504(주유소)와 판매순위 파일은 코드 체계가 달라서 **`name_key`로** 붙입니다. 휴게소 쪽에 짝이 없으면 버립니다 (0504 226곳 중 62곳, 파일 267곳 중 71곳).
 - `name_key` 만드는 법: 공백을 모두 지우고, 전각 괄호 `（）`는 `()`로 바꾸고, 끝의 `휴게소`·`주유소`를 뗍니다. 예: `경산(서울)휴게소`, `경산(서울)주유소` → `경산(서울)`
@@ -287,7 +290,8 @@ erDiagram
 - 화장실은 0503에 코드가 없습니다 (모든 휴게소에 있음). `facility`에 넣지 않습니다.
 - Top5: 매장명에 `편의점`, `CU`, `GS25`, `이마트24`, `세븐`이 들어간 행과 상품권(`하나)에코100000`)을 빼고, 남은 행을 원래 순서대로 1위부터 다시 매겨 `rank_no`에 넣습니다. 같은 `base_month`를 다시 넣으면 그 달 행을 지우고 새로 넣습니다.
 - `display_name`: 상품명 앞의 `(할리스)` 같은 괄호 접두어를 뗀 이름.
-- 메뉴 연결: `rest_area_menu.name_key` = `food_name`에서 괄호 접두어와 공백을 지운 값. Top5의 `display_name`에서 공백을 지운 값과 같은 휴게소 안에서 같으면 `menu_id`를 채웁니다 (2026-10월분 기준 약 38%). 없으면 가격 없이 표시합니다.
+- 메뉴 연결: `rest_area_menu.name_key` = `food_name`에서 괄호 접두어와 공백을 지운 값. Top5의 `display_name`에서 공백을 지운 값과 같은 휴게소 안에서 같으면 `menu_id`를 채웁니다. 없으면 가격 없이 표시합니다.
+- 2026-10월분 적재 결과 (2026-11-05): 파일 267곳 중 194곳이 이름으로 연결, 그중 13곳은 5개가 모두 편의점이라 빠져 **181곳 883행**. 가격 연결 282행 (32%).
 
 **`trip` 에너지 값** (way-on.md 3.10, 8.1-1)
 - 에너지 제안 조건: `range_m` < 목적지까지 남은 거리 + 20km. `energy_pct`는 화면 표시용으로만 씁니다.
