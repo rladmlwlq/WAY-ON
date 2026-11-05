@@ -8,12 +8,21 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 내장 내비 조회 (normal) -->
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+    <!-- 경유지 추가·목적지 변경 addWaypoint, requestRoute (normal). NaviHelper 3.0.5 소스로 확인 -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
     <!-- FusedLocation 위치 (dangerous: 런타임 요청) -->
     <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
     <!-- 주행 가능 거리·기어 (normal) -->
     <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
     <!-- 연료·배터리 % (normal) -->
     <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
+    <!-- 음성 안내 (car-app-design.md 6-9) -->
+    <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+    <!-- 포그라운드 서비스로 통신 유지 (car-app-design.md 7장) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- location 타입은 Android 위치 권한(ACCESS_*_LOCATION)이 필요해서 안 씀. 위치는 NaviHelper로 받음 (11/5 에뮬레이터 확인) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"
@@ -26,11 +35,24 @@
         <activity
             android:name=".MainActivity"
             android:exported="true">
+            <!-- 주행 중에도 요청 수락 화면을 보여야 하므로 DO 선언 (way-on.md 3.2) -->
+            <meta-data
+                android:name="distractionOptimized"
+                android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".service.WayOnService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="동승자 폰과 실시간 연결 유지 (경유지 요청 수락, 출발 알림)" />
+        </service>
     </application>
 
 </manifest>
