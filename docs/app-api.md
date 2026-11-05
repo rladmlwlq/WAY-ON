@@ -373,7 +373,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 | 메시지 | 조건 |
 |---|---|
 | `restarea.approach` | 그 경유지 남은 거리 2km 이하 |
-| `restarea.arrived` | 경유지 도착 콜백(`onWaypointArrived`), 또는 `restarea.approach`를 보낸 뒤 기어 P (way-on.md 3.8) |
+| `restarea.arrived` | 경유지 도착 콜백(`onWayPointArrived`), 또는 `restarea.approach`를 보낸 뒤 기어 P (way-on.md 3.8) |
 | `restarea.left` | 도착 후 기어 D |
 ```json
 {"type": "restarea.approach", "data": {"requestId": 88}}
@@ -395,7 +395,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 {"type": "waypoint.result", "data": {"requestId": 88, "ok": true}}
 {"type": "waypoint.result", "data": {"requestId": 88, "ok": false, "error": "ROUTE_FAILED", "message": "경로를 찾지 못했어요"}}
 ```
-`onRoutingCompleted` → `ok: true`(`APPLIED`), `onError` → `ok: false`(`FAILED`, `fail_reason`에 저장). 폰에만 보여 줍니다 (F4).
+경유지는 `onWaypointChanged(ADD)`, 목적지는 `onRouteStarted` → `ok: true`(`APPLIED`). `onError` 또는 60초 동안 응답 없음 → `ok: false`(`FAILED`, `fail_reason`에 저장). `onRoutingCompleted`는 에뮬레이터에서 오지 않아 쓰지 않습니다 (2026-11-05 확인, car-app-design.md 10장). 폰에 보여 주고, 실패는 차에도 3초 보여 줍니다.
 
 ### 5-12. 출발해요 (A2) — 차량 앱이 보내는 것
 
@@ -422,7 +422,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
             "address": "충북 청주시 …", "lat": 36.62, "lng": 127.43}}}
 ```
 - `type`에 `PARKING`도 됩니다 (`extId` `pl:{parking_lot.id}`). 주차장은 경유지가 아니라 **목적지로** 바꿉니다 (way-on.md 3.6).
-- `action`은 **서버가 정합니다**: 목적지 없음 → `SET_DEST`, 주차장 → `SET_DEST`, 경유지 2개 참 → `REPLACE_FIRST`, 그 밖 → `ADD`.
+- `action`은 **서버가 정합니다**: 목적지 없음 → `SET_DEST`, 주차장 → `SET_DEST`, 그 밖 → `ADD`. **경유지 2개가 이미 찼으면 받지 않고** `error WAYPOINT_FULL`을 돌려줍니다 (차로 보내지 않음, 2026-11-05 결정).
 - 응답 `ack {"requestId": 88}`. 이전 `PENDING` 요청이 있으면 그것을 `EXPIRED`로 바꾸고 새 요청을 받습니다 (마지막 요청 우선, way-on.md 5장 6번).
 - 장소 정보는 폰이 보낸 값을 그대로 저장하지 않고, **서버가 `extId`로 다시 찾은 값**을 저장합니다 (폰이 좌표를 바꿔 보내는 것 방지). 다시 못 찾으면 `error PLACE_NOT_FOUND`.
 
@@ -481,10 +481,9 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
   "requestId": 88, "requestedBy": "민지",
   "place": {"type": "REST_AREA", "name": "경산(서울)휴게소", "address": "…", "lat": 35.86, "lng": 128.80},
   "action": "ADD",
-  "replaceTarget": null,
   "expiresAt": "2026-11-05T08:20:10.000Z"}}
 ```
-- `REPLACE_FIRST`면 `replaceTarget: {"name": "칠곡휴게소"}` → 차 화면에 "1번 경유지 칠곡휴게소와 바꿀까요?"
+- `action`은 `ADD` | `SET_DEST`. `SET_DEST`면 차 화면에 "목적지를 ○○로 바꿀까요?"
 - 주행 중에도 보냅니다. 수락 화면은 DO 화면으로 짧게 (way-on.md 3.5).
 
 ### 7-3. Web Push 내용
@@ -515,6 +514,7 @@ Service Worker가 받는 JSON. 페이지가 열려 있어도 `departure.called`�
 | `TRIP_NOT_ACTIVE` | 404 | ACTIVE 세션 없음 | "차량 앱이 켜지면 연결돼요" |
 | `NO_ROUTE` | 409 | 목적지 없음 | "목적지를 정하면 경로 위에서 찾아 드려요" |
 | `PLACE_NOT_FOUND` | 404 | `extId`로 장소를 다시 못 찾음 | "장소 정보를 찾지 못했어요" |
+| `WAYPOINT_FULL` | 409 | 경유지 2개가 이미 참 | "경유지가 가득 찼어요" |
 | `REQUEST_EXPIRED` | 409 | 10초 지났거나 밀린 요청을 수락 | (차) 수락 화면 닫기 |
 | `CALL_ALREADY_OPEN` | 409 | 열린 출발 알림이 있음 | — (기존 것을 보여 줌) |
 | `CALL_CLOSED` | 409 | 닫힌 출발 알림에 답장 | "출발 알림이 끝났어요" |

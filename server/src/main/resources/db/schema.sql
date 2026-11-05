@@ -82,7 +82,7 @@ CREATE TABLE waypoint_request (
   address       VARCHAR(200) COMMENT '주소',
   lat           DECIMAL(9,6) NOT NULL COMMENT '위도',
   lng           DECIMAL(9,6) NOT NULL COMMENT '경도',
-  action        VARCHAR(15)  NOT NULL COMMENT '동작',          -- ADD / REPLACE_FIRST / SET_DEST
+  action        VARCHAR(15)  NOT NULL COMMENT '동작',          -- ADD / SET_DEST
   status        VARCHAR(10)  NOT NULL COMMENT '상태',          -- PENDING / ACCEPTED / APPLIED / REJECTED / FAILED / EXPIRED
   requested_at  DATETIME(3)  NOT NULL COMMENT '요청 시각',
   decided_at    DATETIME(3)  COMMENT '결정 시각',
