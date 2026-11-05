@@ -897,7 +897,7 @@ app-api.md를 따르되, 앱 결정 때문에 규격에 더할 것이 있습니�
 
 2026-11-05 세팅에서 한 것: ZXing, `lifecycle-service`, 음성·포그라운드 서비스·알림 권한, DO 선언, `service/WayOnService.kt` 뼈대, `Config.kt`(11장 기준값), 서버·웹 주소 빌드 설정값, 디버그 빌드만 `http` 허용. `assembleDebug` 통과.
 
-- [ ] **서비스 실행 연결**: `MainActivity`에서 `WayOnService`를 띄우고 bind. 알림 권한(`POST_NOTIFICATIONS`)도 이때 요청. 첫 기능(연결)을 붙일 때 같이 함
+- [x] **서비스 실행 연결** (11/5): `MainActivity`가 켜질 때 `WayOnService`를 띄우고 알림 권한을 요청함. 서비스는 `CarSignals`(기어·주행 가능 거리·연료·배터리)를 시작. bind는 화면을 붙일 때 (`LocalBinder` 준비됨)
 - [x] **임시 확인 화면 정리** (11/5): `LocationCheck.kt`, `VehicleCheck.kt`, `SdkCheck.kt`와 `MainActivity`의 확인용 화면·adb 명령 처리를 지움. `NaviBridge`, `CarSignals`는 10장 결과대로 새로 작성
 - [ ] **서버·웹 주소**: 지금은 로컬 개발용(`http://10.0.2.2:8080`, `http://localhost:5173`). 서버 배포처와 Vercel 주소가 정해지면 `app/build.gradle.kts`의 `SERVER_URL`, `WEB_URL`을 바꿈. 디버그·릴리스 값을 나눌지도 그때 정함
 - [ ] **DO 선언 이름 확인**: Android Automotive 표준 `distractionOptimized`를 씀. Pleos도 같은지 문서로 확인하고, 에뮬레이터에서 주행 중 수락 화면이 막히지 않는지 봄
