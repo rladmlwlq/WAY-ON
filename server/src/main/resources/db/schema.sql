@@ -82,7 +82,7 @@ CREATE TABLE waypoint_request (
   address       VARCHAR(200) COMMENT '주소',
   lat           DECIMAL(9,6) NOT NULL COMMENT '위도',
   lng           DECIMAL(9,6) NOT NULL COMMENT '경도',
-  action        VARCHAR(15)  NOT NULL COMMENT '동작',          -- ADD / REPLACE_FIRST / SET_DEST
+  action        VARCHAR(15)  NOT NULL COMMENT '동작',          -- ADD / SET_DEST
   status        VARCHAR(10)  NOT NULL COMMENT '상태',          -- PENDING / ACCEPTED / APPLIED / REJECTED / FAILED / EXPIRED
   requested_at  DATETIME(3)  NOT NULL COMMENT '요청 시각',
   decided_at    DATETIME(3)  COMMENT '결정 시각',
@@ -101,7 +101,7 @@ CREATE TABLE rest_area (
   direction_label  VARCHAR(20)  NOT NULL COMMENT '방향',                -- 예: 서울방향
   lat              DECIMAL(9,6) NOT NULL COMMENT '위도',
   lng              DECIMAL(9,6) NOT NULL COMMENT '경도',
-  travel_bearing   SMALLINT     NOT NULL COMMENT '진입 진행 방향(0~359)', -- 반대 차로 휴게소 제외용
+  travel_bearing   SMALLINT     COMMENT '진입 진행 방향(0~359)',        -- 반대 차로 휴게소 제외용. NULL = 양방향 공용(기흥복합 등). 계산 규칙은 erd.md
   updated_at       DATETIME(3)  NOT NULL COMMENT '갱신 시각',
   INDEX idx_ra_name_key (name_key)
 ) COMMENT '휴게소 (상·하행 각각 1행)';
@@ -109,7 +109,7 @@ CREATE TABLE rest_area (
 CREATE TABLE facility (
   id            BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '시설 ID',
   rest_area_id  BIGINT       NOT NULL COMMENT '휴게소 ID',
-  source        VARCHAR(10)  NOT NULL COMMENT '출처',          -- REST_AREA(0503 휴게소) / GAS_STATION(0504 휴게소 주유소)
+  source        VARCHAR(12)  NOT NULL COMMENT '출처',          -- REST_AREA(0503 휴게소) / GAS_STATION(0504 휴게소 주유소)
   ps_code       CHAR(2)      NOT NULL COMMENT '편의시설 코드',  -- 도로공사 psCode 그대로 (01 수면실 … 99 기타, api.md 0503)
   name          VARCHAR(50)  NOT NULL COMMENT '시설 이름',      -- psName
   detail        VARCHAR(500) COMMENT '상세',                   -- psDesc. 수소충전은 0504 99 기타의 이 글자로만 알 수 있음
@@ -125,7 +125,7 @@ CREATE TABLE rest_area_brand (
   rest_area_id  BIGINT       NOT NULL COMMENT '휴게소 ID',
   brd_code      VARCHAR(5)   NOT NULL COMMENT '브랜드 코드',    -- 같은 브랜드면 휴게소끼리 같은 값
   brd_name      VARCHAR(50)  NOT NULL COMMENT '브랜드 이름',
-  detail        VARCHAR(200) COMMENT '상세',                   -- brdDesc
+  detail        VARCHAR(500) COMMENT '상세',                   -- brdDesc. 최대 327자 (2026-11-05)
   open_time     CHAR(5)      NOT NULL COMMENT '영업 시작(HH:mm)',
   close_time    CHAR(5)      NOT NULL COMMENT '영업 종료(HH:mm, 24:00까지)',
   CONSTRAINT fk_rab_ra FOREIGN KEY (rest_area_id) REFERENCES rest_area(id) ON DELETE CASCADE,

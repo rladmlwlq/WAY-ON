@@ -1,6 +1,9 @@
 package com.wayon.car
 
+import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,41 +15,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.wayon.car.service.WayOnService
 
+/**
+ * 첫 화면 자리. 화면 6개는 docs/car-app-design.md 4장대로 붙인다.
+ * 앱이 켜지면 WayOnService를 띄운다 (14장 "서비스 실행 연결").
+ */
 class MainActivity : ComponentActivity() {
 
-    // 임시: 위치 소스 확인 (LocationCheck.kt 참고)
-    private lateinit var locationCheck: LocationCheck
-    private var fusedText by mutableStateOf("확인 중…")
-    private var naviText by mutableStateOf("확인 중…")
-
-    // 임시: 에너지 제안용 차량 값 확인 (VehicleCheck.kt 참고)
-    private lateinit var vehicleCheck: VehicleCheck
-    private var vehicleText by mutableStateOf("확인 중…")
-
-    private val fusedPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) locationCheck.startFused() else fusedText = "[Fused] 권한 거부됨"
-        }
+    // 알림 권한은 없어도 동작한다. 거부하면 상단 알림과 heads-up만 안 보임 (7-3)
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        locationCheck = LocationCheck(
-            context = this,
-            onFused = { fusedText = it },
-            onNavi = { naviText = it },
-        )
-        startLocationCheck()
-
-        vehicleCheck = VehicleCheck(context = this, onText = { vehicleText = it })
-        vehicleCheck.start()
+        askNotificationPermission()
+        startForegroundService(Intent(this, WayOnService::class.java))
 
         setContent {
             MaterialTheme {
@@ -56,33 +43,16 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Text("WAY:ON", style = MaterialTheme.typography.headlineLarge)
-                        Text("FusedLocation", style = MaterialTheme.typography.titleMedium)
-                        Text(fusedText)
-                        Text("NaviHelper getCurrentLocationInfo()", style = MaterialTheme.typography.titleMedium)
-                        Text(naviText)
-                        Text("Vehicle (에너지 제안)", style = MaterialTheme.typography.titleMedium)
-                        Text(vehicleText)
                     }
                 }
             }
         }
     }
 
-    private fun startLocationCheck() {
-        locationCheck.startNavi()
-
-        val granted = ContextCompat.checkSelfPermission(this, LocationCheck.FUSED_PERMISSION) ==
+    private fun askNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
-        when {
-            !locationCheck.fusedSupported -> locationCheck.startFused() // 미지원 메시지만 표시
-            granted -> locationCheck.startFused()
-            else -> fusedPermission.launch(LocationCheck.FUSED_PERMISSION)
-        }
-    }
-
-    override fun onDestroy() {
-        locationCheck.stop()
-        vehicleCheck.stop()
-        super.onDestroy()
+        if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }

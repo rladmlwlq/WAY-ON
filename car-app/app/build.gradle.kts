@@ -17,6 +17,11 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // 서버·폰 웹 주소 (car-app-design.md 2장). 배포처가 정해지면 바꿈
+        // 에뮬레이터에서 PC의 localhost는 10.0.2.2
+        buildConfigField("String", "SERVER_URL", "\"http://10.0.2.2:8080\"")
+        buildConfigField("String", "WEB_URL", "\"http://localhost:5173\"")
     }
 
     buildTypes {
@@ -38,6 +43,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
@@ -55,6 +61,8 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp)
+    implementation(libs.zxing.core)
+    implementation(libs.androidx.lifecycle.service)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
