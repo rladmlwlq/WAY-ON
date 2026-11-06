@@ -160,6 +160,17 @@ CREATE TABLE rest_area_top_item (
   CONSTRAINT fk_rati_menu FOREIGN KEY (menu_id) REFERENCES rest_area_menu(id) ON DELETE SET NULL
 ) COMMENT '휴게소 먹거리 판매 Top5 (판매순위 파일, 매월)';
 
+CREATE TABLE rest_area_place (
+  kakao_id      VARCHAR(20)  PRIMARY KEY COMMENT '카카오 장소 ID',
+  std_rest_cd   CHAR(6)      NOT NULL COMMENT '휴게소 코드',            -- 상·하행 중 어느 쪽인지 적재 때 정함 (erd.md)
+  name          VARCHAR(100) NOT NULL COMMENT '장소 이름(카카오)',
+  kind          VARCHAR(10)  NOT NULL COMMENT '종류',                  -- FOOD / CAFE / STORE / GAS / EV / TOILET / ATM
+  lat           DECIMAL(9,6) NOT NULL COMMENT '위도',
+  lng           DECIMAL(9,6) NOT NULL COMMENT '경도',
+  CONSTRAINT fk_rap_ra FOREIGN KEY (std_rest_cd) REFERENCES rest_area(std_rest_cd) ON DELETE CASCADE,
+  INDEX idx_rap_ra (std_rest_cd)
+) COMMENT '휴게소 지도 장소 (카카오 주변 검색, 적재 때 한 번)';
+
 CREATE TABLE ev_station (
   id               BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '충전소 ID',
   stat_id          VARCHAR(20)  NOT NULL UNIQUE COMMENT '환경부 충전소 ID(statId)',

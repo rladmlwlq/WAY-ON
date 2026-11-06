@@ -5,7 +5,7 @@ import com.wayon.car.car.DriveInfo
 import com.wayon.car.car.Gear
 import com.wayon.car.car.NaviEvent
 import com.wayon.car.car.Remain
-import com.wayon.car.server.RestAreaDetail
+import com.wayon.car.server.RestAreaMap
 import com.wayon.car.ui.durationText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -31,7 +31,7 @@ class RestAreaGuideTest {
         passengersOnline = { passengers },
         say = { said += it },
         report = { type, id -> reported += type to id },
-        loadDetail = { _, extId -> loaded += extId },
+        loadMap = { _, extId -> loaded += extId },
         arrival = RestAreaArrival(approachM = 2_000),
     )
 
@@ -114,15 +114,15 @@ class RestAreaGuideTest {
     fun `카드 정보는 지금 카드의 휴게소일 때만 넣는다`() {
         guide.onWaypoints(listOf(gyeongsan))
         guide.onNavi(NaviEvent.WaypointArrived(gyeongsan.name))
-        val detail = RestAreaDetail("000048", gyeongsan.name, "경부선", "서울방향", 0.0, 0.0, topMonth = null)
+        val map = RestAreaMap("000048", gyeongsan.name, "서울방향", 0.0, 0.0)
 
-        guide.onDetail("다른휴게소", detail)
-        assertNull(guide.ui.value.arrived?.detail)
+        guide.onMap("다른휴게소", map)
+        assertNull(guide.ui.value.arrived?.map)
 
-        guide.onDetail(gyeongsan.name, detail)
-        assertEquals(detail, guide.ui.value.arrived?.detail)
+        guide.onMap(gyeongsan.name, map)
+        assertEquals(map, guide.ui.value.arrived?.map)
 
-        guide.onDetail(gyeongsan.name, null)
+        guide.onMap(gyeongsan.name, null)
         assertTrue(guide.ui.value.arrived!!.loadFailed)
     }
 

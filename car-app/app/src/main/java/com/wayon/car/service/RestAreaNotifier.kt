@@ -60,13 +60,13 @@ class RestAreaNotifier(private val context: Context) {
         const val CHANNEL_ID = "wayon_rest_area"
         private const val NOTIFICATION_ID = 2 // 1은 포그라운드 서비스 알림
 
-        /** 알림 본문: "영업 중 할리스커피 · 던킨도너츠 외 2곳\n편의시설 수유실 · 샤워실 …" */
+        /** 알림 본문: "영업 중 할리스 · 크리스피크림도넛 외 2곳\n편의시설 수유실 · 샤워실 …" (누르면 휴게소 지도) */
         internal fun bodyText(card: ArrivedCard): String {
-            val detail = card.detail
+            val map = card.map
             return when {
-                detail != null -> {
-                    val open = detail.brands.filter { it.openNow == true }.map { it.name }
-                    val facilities = detail.facilities.map { it.name }.distinct()
+                map != null -> {
+                    val open = map.openStoreNames()
+                    val facilities = map.building.facilities.map { it.name }.distinct()
                     val openText = when {
                         open.isEmpty() -> "영업 중인 매장 정보 없음"
                         open.size <= 2 -> "영업 중 " + open.joinToString(" · ")

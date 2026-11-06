@@ -1,0 +1,167 @@
+<!doctype html>
+<!--
+  휴게소 지도 (car-app-design.md 4-7). RestAreaMapScreen이 WebView로 띄운다.
+  - 앱은 출처 없이(기준 주소 null) 이 파일을 연다. 카카오맵 JS 키는 등록 안 된 웹 도메인을 막지만 출처가 없으면 통과한다
+  - 앱 → 지도: load(key), show(json), setCar(lat, lng)
+  - 지도 → 앱: Android.onReady(), Android.onError(why), Android.onSelect(id), Android.onCluster(idsJson)
+  - id: 카카오 장소는 "kakao:123", 휴게소 건물은 "building"
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>
+  html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #1d232a; }
+  .pin {
+    display: flex; flex-direction: column; align-items: center;
+    transform: translateY(-50%); cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .pin .icon {
+    width: 52px; height: 52px; border-radius: 26px; background: #ffffff; border: 3px solid #2b6cb0;
+    display: flex; align-items: center; justify-content: center; font-size: 28px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .45);
+  }
+  .pin .label {
+    margin-top: 4px; padding: 2px 8px; border-radius: 10px; background: rgba(0, 0, 0, .7);
+    color: #fff; font: 600 15px/1.3 sans-serif; white-space: nowrap; max-width: 160px;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .pin.closed { opacity: .4; }
+  .pin.building .icon { width: 64px; height: 64px; border-radius: 32px; border-color: #c05621; font-size: 34px; }
+  .pin.selected .icon { border-color: #f6ad55; border-width: 5px; }
+  .focus { display: flex; flex-direction: column; align-items: center; transform: translateY(-30%); pointer-events: none; }
+  .focus .ring {
+    width: 76px; height: 76px; border-radius: 38px; border: 6px solid #f6ad55;
+    box-shadow: 0 0 0 6px rgba(246, 173, 85, .35); animation: pulse 1.2s ease-in-out infinite;
+  }
+  .focus .label {
+    margin-top: 6px; padding: 4px 12px; border-radius: 12px; background: #f6ad55; color: #1a202c;
+    font: 700 18px/1.3 sans-serif; white-space: nowrap;
+  }
+  @keyframes pulse { 50% { transform: scale(1.15); } }
+  .car {
+    width: 26px; height: 26px; border-radius: 13px; background: #3182ce; border: 4px solid #fff;
+    box-shadow: 0 0 0 8px rgba(49, 130, 206, .3);
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+  window.onerror = function (msg, src, line) { console.log("JS 오류: " + msg + " @" + src + ":" + line); };
+  var ICON = { FOOD: '🍽️', CAFE: '☕', STORE: '🏪', GAS: '⛽', EV: '🔌', TOILET: '🚻', ATM: '🏧' };
+  var map, clusterer, carOverlay, pins = {};
+
+  function load(key) {
+    var s = document.createElement('script');
+    s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + encodeURIComponent(key) + '&libraries=clusterer&autoload=false';
+    s.onload = function () {
+      kakao.maps.load(function () { Android.onReady(); });
+    };
+    s.onerror = function () { Android.onError('sdk'); };
+    document.head.appendChild(s);
+  }
+
+  function pin(id, icon, label, cls) {
+    var el = document.createElement('div');
+    el.className = 'pin ' + (cls || '');
+    el.innerHTML = '<div class="icon"></div><div class="label"></div>';
+    el.querySelector('.icon').textContent = icon;
+    el.querySelector('.label').textContent = label;
+    el.addEventListener('click', function (e) { e.stopPropagation(); select(id); Android.onSelect(id); });
+    return el;
+  }
+
+  function select(id) {
+    Object.keys(pins).forEach(function (k) { pins[k].el.classList.toggle('selected', k === id); });
+  }
+
+  // 카카오 이름 "할리스 매송휴게소목포방향점" → 앞 낱말 "할리스"
+  function shortName(name) { return name.split(/\s+/)[0]; }
+
+  function show(json) {
+    try {
+      var d = JSON.parse(json);
+      var center = new kakao.maps.LatLng(d.lat, d.lng);
+      // 위성 사진 + 도로·이름 (건물을 눈으로 찾기 쉬움)
+      map = new kakao.maps.Map(document.getElementById('map'), { center: center, level: 2, mapTypeId: kakao.maps.MapTypeId.HYBRID });
+      map.addListener('click', function () { select(null); Android.onSelect('building'); });
+
+      // 같은 건물 안 매장은 좌표가 거의 같아 겹친다 → 묶고, 누르면 목록
+      clusterer = new kakao.maps.MarkerClusterer({
+        map: map, gridSize: 56, minLevel: 1, minClusterSize: 2, disableClickZoom: true, averageCenter: true,
+        styles: [{ width: '56px', height: '56px', borderRadius: '28px', background: 'rgba(43,108,176,.9)',
+          border: '3px solid #fff', color: '#fff', textAlign: 'center', lineHeight: '50px', font: '700 20px sans-serif' }]
+      });
+      kakao.maps.event.addListener(clusterer, 'clusterclick', function (cluster) {
+        var ids = cluster.getMarkers().map(function (o) { return o.__id; });
+        Android.onCluster(JSON.stringify(ids));
+      });
+
+      var bounds = new kakao.maps.LatLngBounds();
+      bounds.extend(center);
+
+      var b = pin('building', '🏢', '휴게소 건물', 'building');
+      var bo = new kakao.maps.CustomOverlay({ position: center, content: b, yAnchor: 0.5, zIndex: 3, clickable: true });
+      bo.setMap(map);
+      pins.building = { el: b, overlay: bo };
+
+      var overlays = [];
+      (d.places || []).forEach(function (p) {
+        var pos = new kakao.maps.LatLng(p.lat, p.lng);
+        var el = pin(p.placeId, ICON[p.kind] || '📍', shortName(p.name), p.openNow === false ? 'closed' : '');
+        var o = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 0.5, zIndex: 2, clickable: true });
+        o.__id = p.placeId;
+        overlays.push(o);
+        pins[p.placeId] = { el: el, overlay: o };
+        bounds.extend(pos);
+      });
+      clusterer.addMarkers(overlays);
+
+      // 휴게소에 맞춰 크게 (너무 멀리 빠지지 않게 레벨 3까지)
+      if (overlays.length) map.setBounds(bounds, 60, 60, 60, 60);
+      if (map.getLevel() > 3) map.setLevel(3);
+    } catch (e) {
+      Android.onError('show: ' + e.message);
+    }
+  }
+
+  // 메뉴의 [지도에서 보기]: 그 가게 자리에 고리와 이름을 띄우고 그쪽으로 옮긴다.
+  // 같은 건물이라 묶음(클러스터) 안에 숨어 있어도 보이게 따로 그린다
+  var focusOverlay;
+  function focus(id) {
+    var p = pins[id];
+    if (!map || !p) return;
+    var pos = p.overlay.getPosition();
+    if (!focusOverlay) {
+      var el = document.createElement('div');
+      el.className = 'focus';
+      el.innerHTML = '<div class="ring"></div><div class="label"></div>';
+      focusOverlay = new kakao.maps.CustomOverlay({ content: el, yAnchor: 0.5, zIndex: 5 });
+    }
+    focusOverlay.getContent().querySelector('.label').textContent = p.el.querySelector('.label').textContent;
+    focusOverlay.setPosition(pos);
+    focusOverlay.setMap(map);
+    select(id);
+    if (map.getLevel() > 2) map.setLevel(2);
+    map.panTo(pos);
+  }
+
+  // 화면 크기가 바뀌면(보조 창 비율 변경 등) 지도를 다시 맞춘다
+  window.addEventListener("resize", function () { if (map) map.relayout(); });
+
+  function setCar(lat, lng) {
+    if (!map) return;
+    var pos = new kakao.maps.LatLng(lat, lng);
+    if (!carOverlay) {
+      var el = document.createElement('div');
+      el.className = 'car';
+      carOverlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 0.5, zIndex: 4 });
+      carOverlay.setMap(map);
+    } else {
+      carOverlay.setPosition(pos);
+    }
+  }
+</script>
+</body>
+</html>

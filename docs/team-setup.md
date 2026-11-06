@@ -61,7 +61,8 @@
 3. 기기를 Pleos AVD로 고르고 ▶ 실행
 4. 차 화면에 **"WAY:ON"** 가 뜨면 완료
 
-> `car-app/local.properties`(SDK 경로)는 Studio가 자동으로 만듭니다. git에 올라가지 않으니 손대지 않아도 됩니다.
+> `car-app/local.properties`(SDK 경로)는 Studio가 자동으로 만듭니다. git에 올라가지 않습니다.
+> 휴게소 지도를 보려면 이 파일 끝에 `KAKAO_JS_KEY=`(`server/.env`의 `KAKAO_JS_KEY`와 같은 값)를 한 줄 넣고 다시 빌드합니다. 없으면 지도 없이 정보만 나옵니다.
 
 ---
 
@@ -102,9 +103,9 @@ server/src/main/resources/db/schema.sql
 ```
 gradlew bootRun --args="--wayon.seed=rest-area-load"
 ```
-휴게소 249곳, 편의시설 1,589개, 매장 643개, 메뉴 6,939개, 판매 Top5 1,053행(휴게소 215곳)이 들어가면 완료입니다.
+휴게소 249곳, 편의시설 1,589개, 매장 643개, 메뉴 6,939개, 판매 Top5 1,053행(휴게소 215곳), 지도 장소 1,467곳이 들어가면 완료입니다.
 
-> 2026-11-06에 휴게소 기본키가 숫자 `id`에서 `std_rest_cd`(도로공사 코드)로 바뀌었습니다. 그 전에 휴게소 테이블을 만들었다면 `schema.sql`의 휴게소 테이블 5개(`rest_area`, `facility`, `rest_area_brand`, `rest_area_menu`, `rest_area_top_item`)를 지우고 다시 만든 뒤 위 명령으로 적재합니다.
+> 2026-11-06에 휴게소 기본키가 숫자 `id`에서 `std_rest_cd`(도로공사 코드)로 바뀌었습니다. 그 전에 휴게소 테이블을 만들었다면 `schema.sql`의 휴게소 테이블(`rest_area`, `facility`, `rest_area_brand`, `rest_area_menu`, `rest_area_top_item`, `rest_area_place`)을 지우고 다시 만든 뒤 위 명령으로 적재합니다. `rest_area_place`(휴게소 지도 장소)는 같은 날 더 생긴 테이블입니다.
 
 도로공사 데이터를 새로 받을 때만 아래를 씁니다 (`server/.env`에 `EX_API_KEY`, `KAKAO_REST_KEY` 필요. 카카오 키는 1번 API에 없는 휴게소의 좌표를 찾는 데 씀). API에서 받아 CSV를 다시 만들고 DB에도 넣습니다. 바뀐 CSV는 커밋합니다.
 ```
@@ -115,6 +116,11 @@ gradlew bootRun --args="--wayon.seed=rest-area-fetch"
 gradlew bootRun --args="--wayon.seed=top5-import --wayon.seed.file=C:/받은/파일.zip"
 ```
 경로에 한글이 있으면 실패할 수 있으니 영문 경로로 복사해서 넣습니다.
+
+**휴게소 지도 장소 (가끔, 한 사람만):** 휴게소 안 매장 위치를 카카오에서 다시 받을 때 (`KAKAO_REST_KEY` 필요). 바뀐 `rest_area_place.csv`를 커밋합니다.
+```
+gradlew bootRun --args="--wayon.seed=rest-area-places"
+```
 
 시연 구간처럼 반대 차로 판단이 정확해야 하는 휴게소는 `rest_area_bearing_override.csv`에 방위각을 직접 적습니다 (`docs/erd.md` 휴게소 적재 규칙).
 

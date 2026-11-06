@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
  *
  * <pre>
  * gradlew bootRun --args="--wayon.seed=rest-area-load"    CSV → 로컬 DB (키 필요 없음)
+ * gradlew bootRun --args="--wayon.seed=rest-area-places"  카카오 → 휴게소 지도 장소 CSV → 로컬 DB (KAKAO_REST_KEY 필요)
  * gradlew bootRun --args="--wayon.seed=rest-area-fetch"   도로공사 API → CSV → 로컬 DB (EX_API_KEY 필요)
  * gradlew bootRun --args="--wayon.seed=top5-import --wayon.seed.file=D:/.../판매순위.zip"   판매순위 파일 → CSV → 로컬 DB
  * </pre>
@@ -47,6 +48,10 @@ public class SeedRunner implements ApplicationRunner {
 					restArea.load();
 				}
 				case "rest-area-load" -> restArea.load();
+				case "rest-area-places" -> {
+					restArea.fetchPlaces();
+					restArea.load();
+				}
 				case "top5-import" -> {
 					String file = env.getProperty("wayon.seed.file");
 					if (file == null) {
@@ -56,7 +61,7 @@ public class SeedRunner implements ApplicationRunner {
 					restArea.load();
 				}
 				default -> throw new IllegalArgumentException("모르는 wayon.seed 값: " + mode
-						+ " (rest-area-fetch, rest-area-load, top5-import 중 하나)");
+						+ " (rest-area-fetch, rest-area-load, rest-area-places, top5-import 중 하나)");
 			}
 			log.info("적재 끝: {}", mode);
 		} catch (Exception e) {

@@ -56,4 +56,19 @@
 		ORDER BY std_rest_cd, CASE source WHEN 'REST_AREA' THEN 0 ELSE 1 END, ps_code, id
 	</select>
 
+	<select id="findPlaces" resultType="com.wayon.restarea.RestAreaRows$Place">
+		SELECT kakao_id, name, kind, lat, lng
+		FROM rest_area_place
+		WHERE std_rest_cd = #{code}
+		ORDER BY kind, name
+	</select>
+
+	<!-- 여름·겨울 메뉴도 같이 준다. 정렬: 베스트·추천 먼저 -->
+	<select id="findMenus" resultType="com.wayon.restarea.RestAreaRows$Menu">
+		SELECT food_name, price, recommended, best, premium
+		FROM rest_area_menu
+		WHERE std_rest_cd = #{code}
+		ORDER BY best DESC, recommended DESC, premium DESC, id
+	</select>
+
 </mapper>

@@ -247,6 +247,33 @@ Response `200`
 
 인증 없음. `{"status": "UP", "db": "UP"}` (지금 있는 `HealthController`).
 
+### 3-9. `GET /api/rest-areas/{restAreaId}/map` — 휴게소 지도 (A1, 차 화면 4-7)
+
+차량 토큰 (인증 공통부가 생기면 붙임, 지금은 열려 있음). 휴게소에 도착하면 차량 앱이 한 번 부릅니다.
+
+Response `200`
+```json
+{"restAreaId": "000555", "name": "매송(목포)휴게소", "direction": "목포방향", "lat": 37.265122, "lng": 126.888717,
+ "topMonth": "2026-10",
+ "places": [
+   {"placeId": "kakao:1234", "name": "할리스 매송휴게소목포방향점", "kind": "CAFE", "lat": 37.2647, "lng": 126.8879,
+    "open": "08:00", "close": "20:00", "openNow": true, "topItems": []},
+   {"placeId": "kakao:5678", "name": "매송주유소 목포방향", "kind": "GAS", "lat": 37.2636, "lng": 126.8885,
+    "open": null, "close": null, "openNow": null, "topItems": []}],
+ "building": {
+   "foodCourt": {
+     "topItems": [{"rank": 2, "name": "뚝배기제육", "store": "양갑조국밥", "placeId": null, "price": 10500}],
+     "menus": [{"name": "곰탕", "store": "유가네", "placeId": null, "price": 10000, "best": true, "recommended": false, "premium": false}]},
+   "otherStores": [{"name": "드롭탑(커피전문점)", "open": "08:00", "close": "20:00", "openNow": true,
+                    "topItems": [{"rank": 5, "name": "DT_ICE아메리카노(L)", "store": "카페드롭탑", "price": null}]}],
+   "facilities": [{"code": "04", "name": "수유실", "detail": null, "open": "00:00", "close": "24:00", "source": "REST_AREA"}]}}
+```
+- `lat`·`lng`는 휴게소 건물(지도 중심). `places`는 적재 때 카카오에서 받은 실제 위치의 장소(`rest_area_place`, erd.md). `kind`: `FOOD` `CAFE` `STORE` `GAS` `EV` `TOILET` `ATM`
+- 장소 이름 앞 낱말이 0501 브랜드와 맞으면 `open`·`close`·`openNow`, 판매순위 매장과 맞으면 `topItems`가 붙습니다. 안 맞으면 null·빈 목록
+- `building`: 지도에 따로 위치가 없는 것. `foodCourt.menus`는 0502 메뉴(베스트·추천·프리미엄 먼저). `store`는 메뉴 이름 앞 괄호의 가게(`(유가네)곰탕` → 유가네, 이름은 "곰탕"), 없으면 null(식당가 공용). `foodCourt.topItems`는 판매순위 중 식당가 코너(`한식`, `푸드(…)` 등). `placeId`는 그 가게가 `places`에 있으면 그 ID
+- `otherStores`: 위치를 못 찾은 0501 매장과 판매순위 매장
+- 없는 코드면 `404 PLACE_NOT_FOUND`
+
 ---
 
 ## 4. WebSocket 공통

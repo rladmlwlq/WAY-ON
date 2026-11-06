@@ -35,6 +35,46 @@ public class KakaoPlaceClient {
 		this.key = key;
 	}
 
+	/** 좌표 주변 검색 결과 1개 (휴게소 안 매장 위치용). groupCode는 FD6 음식점, CE7 카페, CS2 편의점 등 */
+	public record Nearby(String id, String name, String categoryName, String groupCode, double lat, double lng) {
+	}
+
+	/** 카테고리 주변 검색 (반경 m, 최대 15개) */
+	public List<Nearby> category(String groupCode, double lat, double lng, int radius) {
+		return nearby("https://dapi.kakao.com/v2/local/search/category.json?category_group_code=" + groupCode
+				+ "&x={x}&y={y}&radius={r}&sort=distance&size=15", null, lat, lng, radius);
+	}
+
+	/** 키워드 주변 검색 (반경 m, 최대 15개) */
+	public List<Nearby> keyword(String query, double lat, double lng, int radius) {
+		return nearby("https://dapi.kakao.com/v2/local/search/keyword.json?query={q}&x={x}&y={y}&radius={r}&size=15",
+				query, lat, lng, radius);
+	}
+
+	@SuppressWarnings("unchecked")
+	private List<Nearby> nearby(String url, String query, double lat, double lng, int radius) {
+		if (!hasKey()) {
+			throw new IllegalStateException("KAKAO_REST_KEY가 없습니다. server/.env에 넣어 주세요 (team-setup.md 4-5)");
+		}
+		Map<String, Object> vars = new java.util.HashMap<>(Map.of("x", lng, "y", lat, "r", radius));
+		if (query != null) {
+			vars.put("q", query);
+		}
+		Map<String, Object> body = http.get()
+				.uri(url, vars)
+				.header("Authorization", "KakaoAK " + key)
+				.retrieve()
+				.body(new ParameterizedTypeReference<Map<String, Object>>() {
+				});
+		Object docs = body == null ? null : body.get("documents");
+		if (!(docs instanceof List<?> list)) {
+			return List.of();
+		}
+		return list.stream().map(o -> (Map<String, Object>) o).map(d -> new Nearby(str(d.get("id")),
+				str(d.get("place_name")), str(d.get("category_name")), str(d.get("category_group_code")),
+				Double.parseDouble(str(d.get("y"))), Double.parseDouble(str(d.get("x"))))).toList();
+	}
+
 	public boolean hasKey() {
 		return key != null && !key.isBlank();
 	}
