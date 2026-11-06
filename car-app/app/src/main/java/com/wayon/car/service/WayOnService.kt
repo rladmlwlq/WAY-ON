@@ -71,7 +71,7 @@ class WayOnService : LifecycleService() {
             passengersOnline = { false }, // TODO passengers.update가 붙으면 online 동승자가 있는지로
             say = voice::say,
             report = ::report,
-            loadDetail = ::loadRestAreaDetail,
+            loadMap = ::loadRestAreaMap,
         )
         wire()
     }
@@ -99,7 +99,7 @@ class WayOnService : LifecycleService() {
                     }
                     // 정보를 받은 뒤(또는 실패한 뒤, 최대 연결 대기 5초) 한 번 띄운다.
                     // 바로 띄우면 heads-up에 "불러오는 중"만 보이고, 내용이 바뀌어도 다시 내려오지 않는다
-                    card.detail == null && !card.loadFailed -> Unit
+                    card.map == null && !card.loadFailed -> Unit
                     seen != card.name -> restAreaNotifier.show(card)
                 }
             }
@@ -107,13 +107,12 @@ class WayOnService : LifecycleService() {
 
         lifecycleScope.launch {
             combine(
-                carSignals.gear,
-                carSignals.energy,
+                combine(carSignals.gear, carSignals.energy, navi.location, ::Triple),
                 navi.drive,
                 myWaypoints.list,
                 guide.ui,
-            ) { gear, energy, drive, waypoints, restArea ->
-                AppState(gear, energy, drive, waypoints, restArea)
+            ) { (gear, energy, location), drive, waypoints, restArea ->
+                AppState(gear, energy, location, drive, waypoints, restArea)
             }.collect { _state.value = it }
         }
     }
@@ -123,13 +122,13 @@ class WayOnService : LifecycleService() {
         log("서버로 보낼 것 (아직 연결 없음): $type requestId=$requestId")
     }
 
-    private fun loadRestAreaDetail(name: String, extId: String) {
-        val id = RestAreaApi.restAreaIdOf(extId) ?: return restAreaGuide.onDetail(name, null)
+    private fun loadRestAreaMap(name: String, extId: String) {
+        val id = RestAreaApi.restAreaIdOf(extId) ?: return restAreaGuide.onMap(name, null)
         lifecycleScope.launch {
-            val detail = runCatching { restAreaApi.restArea(id) }
+            val map = runCatching { restAreaApi.map(id) }
                 .onFailure { log("휴게소 정보 불러오기 실패: ${it.message}") }
                 .getOrNull()
-            restAreaGuide.onDetail(name, detail)
+            restAreaGuide.onMap(name, map)
         }
     }
 

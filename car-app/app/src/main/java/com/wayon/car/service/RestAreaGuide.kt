@@ -4,7 +4,7 @@ import com.wayon.car.car.CarLocation
 import com.wayon.car.car.DriveInfo
 import com.wayon.car.car.Gear
 import com.wayon.car.car.NaviEvent
-import com.wayon.car.server.RestAreaDetail
+import com.wayon.car.server.RestAreaMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,8 +21,8 @@ data class RestAreaUi(
 data class ArrivedCard(
     val name: String,
     val extId: String?,
-    /** 서버 3-7 응답. 불러오는 중이거나 실패하면 null */
-    val detail: RestAreaDetail? = null,
+    /** 서버 3-9 휴게소 지도. 불러오는 중이거나 실패하면 null */
+    val map: RestAreaMap? = null,
     val loadFailed: Boolean = false,
 )
 
@@ -31,7 +31,7 @@ data class ArrivedCard(
  *
  * 입력: `myWaypoints`, 내비 남은 거리·이벤트, 차 위치, 기어.
  * 출력: 화면([ui]), 음성([say], 동승자가 없을 때 접근만), 서버([report], `requestId`가 있을 때만),
- * 도착 카드 정보 요청([loadDetail]), 떠난 휴게소는 `myWaypoints`에서 지움.
+ * 휴게소 지도 요청([loadMap]), 떠난 휴게소는 `myWaypoints`에서 지움.
  */
 class RestAreaGuide(
     private val removeWaypoint: (name: String) -> Unit,
@@ -39,7 +39,7 @@ class RestAreaGuide(
     private val passengersOnline: () -> Boolean,
     private val say: (text: String) -> Unit,
     private val report: (type: String, requestId: Long) -> Unit,
-    private val loadDetail: (name: String, extId: String) -> Unit,
+    private val loadMap: (name: String, extId: String) -> Unit,
     private val arrival: RestAreaArrival = RestAreaArrival(),
 ) {
     private val _ui = MutableStateFlow(RestAreaUi())
@@ -93,12 +93,12 @@ class RestAreaGuide(
 
     fun onGear(gear: Gear) = handle(arrival.onGear(gear))
 
-    /** [loadDetail] 결과. 그사이 다른 휴게소 카드로 바뀌었으면 버린다 */
-    fun onDetail(name: String, detail: RestAreaDetail?) {
+    /** [loadMap] 결과. 그사이 다른 휴게소로 바뀌었으면 버린다 */
+    fun onMap(name: String, map: RestAreaMap?) {
         _ui.update { ui ->
             val card = ui.arrived
             if (card?.name != name) ui
-            else ui.copy(arrived = card.copy(detail = detail, loadFailed = detail == null))
+            else ui.copy(arrived = card.copy(map = map, loadFailed = map == null))
         }
     }
 
@@ -115,7 +115,7 @@ class RestAreaGuide(
                 is RestAreaArrival.Event.Arrived -> {
                     _ui.update { it.copy(approaching = null, arrived = ArrivedCard(stop.name, extId)) }
                     stop.requestId?.let { report(TYPE_ARRIVED, it) }
-                    if (extId != null) loadDetail(stop.name, extId) else onDetail(stop.name, null)
+                    if (extId != null) loadMap(stop.name, extId) else onMap(stop.name, null)
                 }
                 is RestAreaArrival.Event.Left -> {
                     _ui.update { ui ->

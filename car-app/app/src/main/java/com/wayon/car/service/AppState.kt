@@ -1,5 +1,6 @@
 package com.wayon.car.service
 
+import com.wayon.car.car.CarLocation
 import com.wayon.car.car.DriveInfo
 import com.wayon.car.car.Energy
 import com.wayon.car.car.Gear
@@ -11,6 +12,8 @@ import com.wayon.car.car.Gear
 data class AppState(
     val gear: Gear = Gear.UNKNOWN,
     val energy: Energy = Energy(),
+    /** 차 위치 (NaviHelper, 5초마다). 휴게소 지도에 현재 위치로 찍는다 */
+    val location: CarLocation? = null,
     val drive: DriveInfo? = null,
     val myWaypoints: List<MyWaypoint> = emptyList(),
     val restArea: RestAreaUi = RestAreaUi(),

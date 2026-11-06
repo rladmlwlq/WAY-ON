@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -22,6 +24,13 @@ android {
         // 에뮬레이터에서 PC의 localhost는 10.0.2.2
         buildConfigField("String", "SERVER_URL", "\"http://10.0.2.2:8080\"")
         buildConfigField("String", "WEB_URL", "\"http://localhost:5173\"")
+
+        // 휴게소 지도(카카오맵 JS)용 키. git에 올리지 않는 car-app/local.properties의 KAKAO_JS_KEY (team-setup.md)
+        // 없으면 지도 대신 정보 목록만 보여 준다
+        val localProps = Properties().apply {
+            rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+        }
+        buildConfigField("String", "KAKAO_JS_KEY", "\"${localProps.getProperty("KAKAO_JS_KEY", "")}\"")
     }
 
     buildTypes {
