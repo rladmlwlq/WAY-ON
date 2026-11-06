@@ -39,6 +39,8 @@ public class RestAreaSeeder {
 	static final String BRAND = "rest_area_brand.csv";
 	static final String MENU = "rest_area_menu.csv";
 	static final String TOP_ITEM = "rest_area_top_item.csv";
+	/** 1번 API에 없어 카카오로 좌표를 찾은 결과 (적재에는 안 씀, 검토용) */
+	static final String GEOCODE_LOG = "rest_area_geocode.csv";
 
 	/** Top5에서 뺄 편의점 매장 (erd.md 휴게소 적재 규칙) */
 	private static final List<String> CONVENIENCE = List.of("편의점", "CU", "GS25", "이마트24", "세븐");
@@ -46,13 +48,15 @@ public class RestAreaSeeder {
 	private static final List<String> NOT_FOOD = List.of("하나)에코100000");
 
 	private final ExApiClient ex;
+	private final KakaoPlaceClient kakao;
 	private final JdbcTemplate jdbc;
 	private final TransactionTemplate tx;
 	private final Path dir;
 
-	public RestAreaSeeder(ExApiClient ex, JdbcTemplate jdbc, TransactionTemplate tx,
+	public RestAreaSeeder(ExApiClient ex, KakaoPlaceClient kakao, JdbcTemplate jdbc, TransactionTemplate tx,
 			@Value("${wayon.seed.dir:src/main/resources/db/seed}") String dir) {
 		this.ex = ex;
+		this.kakao = kakao;
 		this.jdbc = jdbc;
 		this.tx = tx;
 		this.dir = Path.of(dir);
@@ -96,7 +100,7 @@ public class RestAreaSeeder {
 			}
 			double lat = Double.parseDouble(str(l, "yValue"));
 			double lng = Double.parseDouble(str(l, "xValue"));
-			Integer bearing = TravelBearing.toward(direction, lat, lng);
+			Integer bearing = TravelBearing.toward(direction, str(l, "routeName"), lat, lng);
 			if (bearing == null) {
 				noBearing++;
 				log.info("방위각 없음 (양방향 또는 도시 좌표 없음): {} 방향={}", name, direction);
@@ -108,8 +112,15 @@ public class RestAreaSeeder {
 		}
 		log.info("휴게소 {}곳 (쉼터 {}곳 제외, 방위각 없음 {}곳)", areas.size(), shelters, noBearing);
 
+		List<Map<String, Object>> conv = ex.fetchAll("restinfo/restConvList"); // 0503
+		List<Map<String, Object>> brandRows = ex.fetchAll("restinfo/restBrandList"); // 0501
+		List<Map<String, Object>> menuRows = ex.fetchAll("restinfo/restBestfoodList"); // 0502
+
+		// 1번에 없는 휴게소를 2번·0501~0503에서 찾아 카카오 좌표로 더한다 (확실한 것만)
+		List<List<Object>> geocodeLog = addMissing(areas, stdByNameKey, route, List.of(conv, brandRows, menuRows));
+
 		List<List<Object>> facilities = new ArrayList<>();
-		for (Map<String, Object> f : ex.fetchAll("restinfo/restConvList")) { // 0503
+		for (Map<String, Object> f : conv) { // 0503
 			String std = str(f, "stdRestCd");
 			if (areas.containsKey(std)) {
 				facilities.add(row(std, "REST_AREA", str(f, "psCode"), str(f, "psName"), str(f, "psDesc"),
@@ -127,7 +138,7 @@ public class RestAreaSeeder {
 		}
 
 		Map<String, List<Object>> brands = new LinkedHashMap<>();
-		for (Map<String, Object> b : ex.fetchAll("restinfo/restBrandList")) { // 0501
+		for (Map<String, Object> b : brandRows) { // 0501
 			String std = str(b, "stdRestCd");
 			if (areas.containsKey(std)) {
 				brands.putIfAbsent(std + "|" + str(b, "brdCode"), row(std, str(b, "brdCode"), str(b, "brdName"),
@@ -136,7 +147,7 @@ public class RestAreaSeeder {
 		}
 
 		Map<String, List<Object>> menus = new LinkedHashMap<>();
-		for (Map<String, Object> m : ex.fetchAll("restinfo/restBestfoodList")) { // 0502
+		for (Map<String, Object> m : menuRows) { // 0502
 			String std = str(m, "stdRestCd");
 			String food = str(m, "foodNm");
 			if (areas.containsKey(std) && food != null) {
@@ -154,11 +165,106 @@ public class RestAreaSeeder {
 				"close_time"), new ArrayList<>(brands.values()));
 		Csv.write(dir.resolve(MENU), List.of("std_rest_cd", "seq", "food_name", "name_key", "price",
 				"recommended", "best", "premium", "season"), new ArrayList<>(menus.values()));
+		Csv.write(dir.resolve(GEOCODE_LOG), List.of("std_rest_cd", "name", "route_name", "ex_address", "result",
+				"reason", "kakao_place", "kakao_address", "lat", "lng"), geocodeLog);
 		if (!Files.exists(dir.resolve(OVERRIDE))) {
 			Csv.write(dir.resolve(OVERRIDE), List.of("std_rest_cd", "travel_bearing", "memo"), List.of());
 		}
 		log.info("CSV 저장 {}: 휴게소 {}, 편의시설 {} (주유소 {}), 매장 {}, 메뉴 {}", dir.toAbsolutePath(),
 				areas.size(), facilities.size(), oilMatched, brands.size(), menus.size());
+	}
+
+	/**
+	 * 1번 API(좌표)에 없는 휴게소를 더한다. 이름·노선·주소·방향은 2번과 0501~0503에서, 좌표는 카카오 키워드 검색에서.
+	 * 좌표를 확실히 못 고르면 넣지 않는다 ({@link RestAreaGeocode#pick}). 결정은 모두 rest_area_geocode.csv에 남긴다.
+	 *
+	 * @return rest_area_geocode.csv 행
+	 */
+	private List<List<Object>> addMissing(Map<String, List<Object>> areas, Map<String, String> stdByNameKey,
+			List<Map<String, Object>> route, List<List<Map<String, Object>>> others) {
+		// 코드 → {이름, 노선, 주소}. 0501~0503을 먼저: 편의시설·매장·메뉴가 붙는 코드가 이쪽이다.
+		// 2번은 같은 휴게소를 옛 코드로 주는 곳이 있다 (논공: 2번 000399, 0503 000446. 2026-11-06 확인)
+		Map<String, String[]> candidates = new LinkedHashMap<>();
+		Map<String, String> codeByKey = new HashMap<>();
+		for (List<Map<String, Object>> list : others) {
+			for (Map<String, Object> r : list) {
+				String std = str(r, "stdRestCd");
+				String name = str(r, "stdRestNm");
+				if (std != null && name != null) {
+					candidates.putIfAbsent(std, new String[] { name, str(r, "routeNm"), str(r, "svarAddr") });
+					codeByKey.putIfAbsent(RestAreaNames.nameKey(name), std);
+				}
+			}
+		}
+		List<List<Object>> logRows = new ArrayList<>();
+		for (Map<String, Object> r : route) {
+			String std = str(r, "serviceAreaCode2");
+			String name = str(r, "serviceAreaName");
+			if (std == null || name == null || areas.containsKey(std)) {
+				continue;
+			}
+			String same = codeByKey.get(RestAreaNames.nameKey(name));
+			if (same == null) {
+				candidates.putIfAbsent(std, new String[] { name, str(r, "routeName"), str(r, "svarAddr") });
+			} else {
+				if (candidates.get(same)[2] == null) {
+					candidates.get(same)[2] = str(r, "svarAddr");
+				}
+				if (!same.equals(std)) {
+					logRows.add(row(std, name, str(r, "routeName"), str(r, "svarAddr"), "SKIP",
+							"같은 휴게소의 2번 API 코드. 0501~0503 코드 " + same + "를 씀", null, null, null, null));
+				}
+			}
+		}
+
+		if (!kakao.hasKey()) {
+			log.warn("KAKAO_REST_KEY가 없어 1번 API에 없는 휴게소를 더하지 않습니다");
+			return logRows;
+		}
+		int added = 0;
+		for (Map.Entry<String, String[]> e : candidates.entrySet()) {
+			String std = e.getKey();
+			if (areas.containsKey(std)) {
+				continue;
+			}
+			String name = RestAreaNames.normalizeParen(e.getValue()[0]).trim();
+			// 2번은 노선을 "논산천안선,호남선"처럼 여러 개 줄 때가 있다. 다른 행과 맞춰 첫 번째만
+			String routeName = e.getValue()[1] == null ? null : e.getValue()[1].split(",")[0].trim();
+			String address = e.getValue()[2];
+			String nameKey = RestAreaNames.nameKey(name);
+			String skip = null;
+			if (!RestAreaGeocode.isRestAreaName(name)) {
+				skip = "휴게소 이름이 아님 (쉼터·주차장·운영사별 이름)";
+			} else if (stdByNameKey.containsKey(nameKey)) {
+				skip = "같은 이름이 이미 있음 (" + stdByNameKey.get(nameKey) + ")";
+			} else if (routeName == null) {
+				skip = "노선명 없음";
+			}
+			if (skip != null) {
+				logRows.add(row(std, name, routeName, address, "SKIP", skip, null, null, null, null));
+				continue;
+			}
+
+			// 이름에 방향 괄호가 없으면 양방향 휴게소로 보고, 카카오에서도 양방향(또는 방향 없음)인 것만 쓴다
+			String direction = RestAreaNames.directionInName(name);
+			List<KakaoPlaceClient.Place> places = kakao.search(RestAreaGeocode.baseName(name) + "휴게소");
+			RestAreaGeocode.Result res = RestAreaGeocode.pick(places, name, direction, address);
+			if (!res.ok()) {
+				logRows.add(row(std, name, routeName, address, "SKIP", res.reason(), null, null, null, null));
+				continue;
+			}
+			KakaoPlaceClient.Place p = res.place();
+			BigDecimal lat = BigDecimal.valueOf(p.lat()).setScale(6, java.math.RoundingMode.HALF_UP);
+			BigDecimal lng = BigDecimal.valueOf(p.lng()).setScale(6, java.math.RoundingMode.HALF_UP);
+			areas.put(std, row(std, name, nameKey, routeName, direction == null ? "양방향" : direction + "방향",
+					lat, lng, TravelBearing.toward(direction, routeName, lat.doubleValue(), lng.doubleValue())));
+			stdByNameKey.putIfAbsent(nameKey, std);
+			added++;
+			String kakaoAddr = p.roadAddressName().isEmpty() ? p.addressName() : p.roadAddressName();
+			logRows.add(row(std, name, routeName, address, "ADDED", null, p.placeName(), kakaoAddr, lat, lng));
+		}
+		log.info("1번 API에 없던 휴게소: 후보 {}곳 중 {}곳 추가 (자세한 결과 {})", logRows.size(), added, GEOCODE_LOG);
+		return logRows;
 	}
 
 	// ---------------------------------------------------------------- Top5: 판매순위 파일 → CSV
@@ -266,40 +372,38 @@ public class RestAreaSeeder {
 							new BigDecimal(r[6]), override.containsKey(r[0]) ? override.get(r[0]) : intOrNull(r[7]),
 							now }).toList());
 
-			Map<String, Long> idByStd = new HashMap<>();
-			jdbc.query("SELECT id, std_rest_cd FROM rest_area",
-					rs -> {
-						idByStd.put(rs.getString("std_rest_cd"), rs.getLong("id"));
-					});
+			// 휴게소 CSV에 없는 코드의 행은 넣지 않는다 (외래 키)
+			java.util.Set<String> codes = new java.util.HashSet<>();
+			areas.forEach(r -> codes.add(r[0]));
 
-			jdbc.batchUpdate("INSERT INTO facility (rest_area_id, source, ps_code, name, detail, open_time,"
+			jdbc.batchUpdate("INSERT INTO facility (std_rest_cd, source, ps_code, name, detail, open_time,"
 					+ " close_time) VALUES (?, ?, ?, ?, ?, ?, ?)",
-					facilities.stream().filter(r -> idByStd.containsKey(r[0]))
-							.map(r -> new Object[] { idByStd.get(r[0]), r[1], r[2], r[3], r[4], r[5], r[6] })
+					facilities.stream().filter(r -> codes.contains(r[0]))
+							.map(r -> new Object[] { r[0], r[1], r[2], r[3], r[4], r[5], r[6] })
 							.toList());
-			jdbc.batchUpdate("INSERT INTO rest_area_brand (rest_area_id, brd_code, brd_name, detail, open_time,"
+			jdbc.batchUpdate("INSERT INTO rest_area_brand (std_rest_cd, brd_code, brd_name, detail, open_time,"
 					+ " close_time) VALUES (?, ?, ?, ?, ?, ?)",
-					brands.stream().filter(r -> idByStd.containsKey(r[0]))
-							.map(r -> new Object[] { idByStd.get(r[0]), r[1], r[2], r[3], r[4], r[5] }).toList());
-			jdbc.batchUpdate("INSERT INTO rest_area_menu (rest_area_id, seq, food_name, name_key, price,"
+					brands.stream().filter(r -> codes.contains(r[0]))
+							.map(r -> new Object[] { r[0], r[1], r[2], r[3], r[4], r[5] }).toList());
+			jdbc.batchUpdate("INSERT INTO rest_area_menu (std_rest_cd, seq, food_name, name_key, price,"
 					+ " recommended, best, premium, season) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-					menus.stream().filter(r -> idByStd.containsKey(r[0]))
-							.map(r -> new Object[] { idByStd.get(r[0]), r[1], r[2], r[3], intOrNull(r[4]),
+					menus.stream().filter(r -> codes.contains(r[0]))
+							.map(r -> new Object[] { r[0], r[1], r[2], r[3], intOrNull(r[4]),
 									Boolean.parseBoolean(r[5]), Boolean.parseBoolean(r[6]),
 									Boolean.parseBoolean(r[7]), r[8] })
 							.toList());
 
 			// Top5: 같은 휴게소 메뉴 중 이름이 맞으면 menu_id로 가격 연결 (erd.md, 약 38%)
-			Map<String, Long> menuIdByKey = new HashMap<>(); // rest_area_id|name_key → menu id
-			jdbc.query("SELECT id, rest_area_id, name_key FROM rest_area_menu ORDER BY id",
+			Map<String, Long> menuIdByKey = new HashMap<>(); // std_rest_cd|name_key → menu id
+			jdbc.query("SELECT id, std_rest_cd, name_key FROM rest_area_menu ORDER BY id",
 					rs -> {
-						menuIdByKey.putIfAbsent(rs.getLong("rest_area_id") + "|" + rs.getString("name_key"),
+						menuIdByKey.putIfAbsent(rs.getString("std_rest_cd") + "|" + rs.getString("name_key"),
 								rs.getLong("id"));
 					});
-			jdbc.batchUpdate("INSERT INTO rest_area_top_item (rest_area_id, base_month, rank_no, store_name,"
+			jdbc.batchUpdate("INSERT INTO rest_area_top_item (std_rest_cd, base_month, rank_no, store_name,"
 					+ " item_name, display_name, menu_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-					tops.stream().filter(r -> idByStd.containsKey(r[0])).map(r -> {
-						Long areaId = idByStd.get(r[0]);
+					tops.stream().filter(r -> codes.contains(r[0])).map(r -> {
+						String areaId = r[0];
 						Long menuId = menuIdByKey.get(areaId + "|" + RestAreaNames.menuKey(r[5]));
 						if (menuId != null) {
 							priced[0]++;
