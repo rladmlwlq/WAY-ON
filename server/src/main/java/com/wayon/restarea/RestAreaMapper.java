@@ -22,4 +22,10 @@ public interface RestAreaMapper {
 	List<RestAreaRows.Brand> findBrands(@Param("code") String code);
 
 	List<RestAreaRows.Facility> findFacilities(@Param("codes") Collection<String> codes);
+
+	/** 휴게소 지도 장소 (카카오) */
+	List<RestAreaRows.Place> findPlaces(@Param("code") String code);
+
+	/** 식당가 메뉴 (0502) */
+	List<RestAreaRows.Menu> findMenus(@Param("code") String code);
 }

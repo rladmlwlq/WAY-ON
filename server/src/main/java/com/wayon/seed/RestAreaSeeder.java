@@ -41,6 +41,8 @@ public class RestAreaSeeder {
 	static final String TOP_ITEM = "rest_area_top_item.csv";
 	/** 1번 API에 없어 카카오로 좌표를 찾은 결과 (적재에는 안 씀, 검토용) */
 	static final String GEOCODE_LOG = "rest_area_geocode.csv";
+	/** 휴게소 지도에 그릴 장소 (카카오 주변 검색) */
+	static final String PLACE = "rest_area_place.csv";
 
 	/** Top5에서 뺄 편의점 매장 (erd.md 휴게소 적재 규칙) */
 	private static final List<String> CONVENIENCE = List.of("편의점", "CU", "GS25", "이마트24", "세븐");
@@ -358,6 +360,7 @@ public class RestAreaSeeder {
 		List<String[]> facilities = Csv.read(dir.resolve(FACILITY));
 		List<String[]> brands = Csv.read(dir.resolve(BRAND));
 		List<String[]> menus = Csv.read(dir.resolve(MENU));
+		List<String[]> places = Files.exists(dir.resolve(PLACE)) ? Csv.read(dir.resolve(PLACE)) : List.of();
 		Path topFile = dir.resolve(TOP_ITEM);
 		List<String[]> tops = Files.exists(topFile) ? Csv.read(topFile) : List.of();
 		int[] priced = { 0 };
@@ -410,10 +413,81 @@ public class RestAreaSeeder {
 						}
 						return new Object[] { areaId, r[1], Integer.valueOf(r[2]), r[3], r[4], r[5], menuId };
 					}).toList());
+
+			jdbc.batchUpdate("INSERT INTO rest_area_place (kakao_id, std_rest_cd, name, kind, lat, lng)"
+					+ " VALUES (?, ?, ?, ?, ?, ?)",
+					places.stream().filter(r -> codes.contains(r[1]))
+							.map(r -> new Object[] { r[0], r[1], r[2], r[3], new BigDecimal(r[4]), new BigDecimal(r[5]) })
+							.toList());
 		});
-		log.info("DB 적재: 휴게소 {}, 편의시설 {}, 매장 {}, 메뉴 {}, Top5 {} (가격 연결 {}) (방위각 직접 입력 {}곳)",
-				areas.size(), facilities.size(), brands.size(), menus.size(), tops.size(), priced[0],
+		log.info("DB 적재: 휴게소 {}, 편의시설 {}, 매장 {}, 메뉴 {}, Top5 {} (가격 연결 {}), 지도 장소 {} (방위각 직접 입력 {}곳)",
+				areas.size(), facilities.size(), brands.size(), menus.size(), tops.size(), priced[0], places.size(),
 				override.size());
+	}
+
+	// ---------------------------------------------------------------- 지도 장소: 카카오 → CSV
+
+	/**
+	 * 휴게소 지도에 그릴 장소(매장·주유소·충전소·화장실·ATM)를 카카오 주변 검색으로 받아 rest_area_place.csv에 넣는다.
+	 * 상·하행 휴게소를 묶어서 받은 뒤 {@link RestAreaPlaces#assign}으로 나눈다. rest_area.csv가 먼저 있어야 한다.
+	 */
+	public void fetchPlaces() throws IOException {
+		List<RestAreaPlaces.Area> all = new ArrayList<>();
+		for (String[] r : Csv.read(dir.resolve(REST_AREA))) {
+			String direction = r[4] == null || r[4].equals("양방향") ? null : r[4].replace("방향", "");
+			all.add(new RestAreaPlaces.Area(r[0], r[1], direction, Double.parseDouble(r[5]), Double.parseDouble(r[6])));
+		}
+		// 같은 이름 앞부분이고 1.5km 안이면 한 쌍 (상행·하행)
+		List<List<RestAreaPlaces.Area>> groups = new ArrayList<>();
+		java.util.Set<String> grouped = new java.util.HashSet<>();
+		for (RestAreaPlaces.Area a : all) {
+			if (grouped.contains(a.code())) {
+				continue;
+			}
+			String base = RestAreaGeocode.baseName(a.name());
+			List<RestAreaPlaces.Area> g = all.stream()
+					.filter(b -> !grouped.contains(b.code()) && RestAreaGeocode.baseName(b.name()).equals(base)
+							&& RestAreaPlaces.meters(a.lat(), a.lng(), b.lat(), b.lng()) < 1500)
+					.toList();
+			g.forEach(b -> grouped.add(b.code()));
+			groups.add(g);
+		}
+
+		// 반대편이 있는데 좌표가 없어 빠진 휴게소의 방향 (이름 앞부분 → 방향들)
+		Map<String, java.util.Set<String>> missing = new HashMap<>();
+		if (Files.exists(dir.resolve(GEOCODE_LOG))) {
+			for (String[] r : Csv.read(dir.resolve(GEOCODE_LOG))) {
+				String d = r[1] == null ? null : RestAreaNames.directionInName(r[1]);
+				if ("SKIP".equals(r[4]) && d != null) {
+					missing.computeIfAbsent(RestAreaGeocode.baseName(r[1]), k -> new java.util.HashSet<>()).add(d);
+				}
+			}
+		}
+
+		List<List<Object>> rows = new ArrayList<>();
+		for (List<RestAreaPlaces.Area> g : groups) {
+			List<KakaoPlaceClient.Nearby> found = new ArrayList<>();
+			for (RestAreaPlaces.Area a : g) {
+				for (String code : List.of("FD6", "CE7", "CS2", "OL7", "BK9")) {
+					found.addAll(kakao.category(code, a.lat(), a.lng(), 400));
+				}
+				// 화장실·전기차충전소처럼 카테고리가 없는 것은 이름으로
+				found.addAll(kakao.keyword(RestAreaGeocode.baseName(a.name()) + "휴게소", a.lat(), a.lng(), 400));
+			}
+			java.util.Set<String> gone = new java.util.HashSet<>(missing.getOrDefault(RestAreaGeocode.baseName(g.get(0).name()), java.util.Set.of()));
+			g.forEach(a -> gone.remove(a.direction()));
+			for (RestAreaPlaces.Place p : RestAreaPlaces.assign(g, gone, found)) {
+				rows.add(row(p.kakaoId(), p.code(), p.name(), p.kind(),
+						BigDecimal.valueOf(p.lat()).setScale(6, java.math.RoundingMode.HALF_UP),
+						BigDecimal.valueOf(p.lng()).setScale(6, java.math.RoundingMode.HALF_UP)));
+			}
+		}
+		rows.sort(java.util.Comparator.comparing((List<Object> r) -> (String) r.get(1))
+				.thenComparing(r -> (String) r.get(3)).thenComparing(r -> (String) r.get(0)));
+		Csv.write(dir.resolve(PLACE), List.of("kakao_id", "std_rest_cd", "name", "kind", "lat", "lng"), rows);
+		long withStores = rows.stream().filter(r -> List.of("FOOD", "CAFE", "STORE").contains(r.get(3)))
+				.map(r -> r.get(1)).distinct().count();
+		log.info("지도 장소 {}개 저장 (매장이 1곳 이상 있는 휴게소 {}/{}곳)", rows.size(), withStores, all.size());
 	}
 
 	// ---------------------------------------------------------------- helpers

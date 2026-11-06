@@ -17,6 +17,7 @@ erDiagram
     REST_AREA ||--o{ REST_AREA_BRAND : "프랜차이즈 매장"
     REST_AREA ||--o{ REST_AREA_MENU : "메뉴"
     REST_AREA ||--o{ REST_AREA_TOP_ITEM : "판매 Top5"
+    REST_AREA ||--o{ REST_AREA_PLACE : "지도 장소"
     REST_AREA_MENU |o--o{ REST_AREA_TOP_ITEM : "가격 연결"
     EV_STATION ||--o{ EV_CHARGER : "충전기"
     VEHICLE ||--o{ DEPARTURE_CALL : "출발 알림"
@@ -158,6 +159,15 @@ erDiagram
         BIGINT menu_id FK "가격 연결, NULL 가능"
     }
 
+    REST_AREA_PLACE {
+        VARCHAR(20) kakao_id PK "카카오 장소 ID"
+        CHAR(6) std_rest_cd FK "상·하행 중 어느 쪽인지 적재 때 정함"
+        VARCHAR(100) name "카카오 장소 이름"
+        VARCHAR(10) kind "FOOD, CAFE, STORE, GAS, EV, TOILET, ATM"
+        DECIMAL(9_6) lat
+        DECIMAL(9_6) lng
+    }
+
     DEPARTURE_CALL {
         BIGINT id PK
         BIGINT vehicle_id FK
@@ -295,6 +305,16 @@ erDiagram
 - 메뉴 연결: `rest_area_menu.name_key` = `food_name`에서 괄호 접두어와 공백을 지운 값. Top5의 `display_name`에서 공백을 지운 값과 같은 휴게소 안에서 같으면 `menu_id`를 채웁니다. 없으면 가격 없이 표시합니다.
 - 2026-10월분 적재 결과 (2026-11-06, 휴게소 249곳 기준): **215곳 1,053행**, 가격 연결 350행 (33%). 판매순위 파일은 운영사별로 이름을 나눈 곳(`문경(양평)휴-건영식품` 등, 하남드림·문경(양평)·문막(인천))이 있어 이 3곳은 Top5가 없습니다. 파일의 `휴게소코드`(`S000001`)는 우리 코드와 체계가 달라 쓰지 않습니다 (숫자가 같아도 다른 휴게소인 곳이 있음).
 
+**휴게소 지도 장소 적재 규칙** (`rest_area_place`, `gradlew bootRun --args="--wayon.seed=rest-area-places"`, `KAKAO_REST_KEY` 필요)
+- 휴게소 안 매장·주유소·충전소·화장실·ATM의 실제 위치. 도로공사 데이터에는 휴게소 안 위치가 없어서 카카오 주변 검색(반경 400m, 음식점·카페·편의점·주유소·ATM 카테고리 + `{이름 앞부분}휴게소` 키워드)으로 받습니다. 코드는 `RestAreaPlaces`.
+- 상·하행 휴게소(이름 앞부분이 같고 1.5km 안)를 묶어서 받은 뒤 나눕니다. **반대편 매장이 섞이지 않게**:
+  - 이름에 이 휴게소 이름 앞부분(예: `매송`)이 있어야 하고, `휴게소`·`주유소`·`충전소`가 없으면 150m 안이어야 함 (`세븐일레븐 경산대학로점` 같은 바깥 가게 제외)
+  - 이름에 `{방향}방향`이 있으면 그 방향 휴게소, 없으면(`상행점`·`하행점` 포함) 가까운 쪽. 정한 휴게소에서 350m 넘으면 뺌
+  - 반대편 휴게소가 있는데 좌표가 없어 목록에 없으면(`rest_area_geocode.csv`의 SKIP), 그 방향 이름이나 다른 방향 표시(`담양방향`, `(광주)`, `(상)`, `상행`)가 붙은 장소는 뺌 (지리산(대구))
+  - 휴게소 자체(카테고리 고속도로휴게소), 주차장, 옷·복권 같은 가게는 뺌. 같은 종류(충전소·화장실·주유소)가 25m 안에 겹치면 하나만
+- 2026-11-06 결과: 1,467곳. 매장(음식점·카페·편의점)이 1곳 이상 있는 휴게소 202/249곳. 상·하행이 한쪽에 섞인 곳은 행담도(양방향 공용)뿐
+- 지도 API(app-api 3-9)는 장소 이름 앞 낱말로 0501 브랜드·판매순위 매장과 잇습니다 (`StoreMatch`). 판매순위의 `한식`, `식당(일반)`, `푸드(…)`, `식당가KIOSK` 같은 코너는 식당가로 모읍니다
+
 **`trip` 에너지 값** (way-on.md 3.10, 8.1-1)
 - 에너지 제안 조건: `range_m` < 목적지까지 남은 거리 + 20km. `energy_pct`는 화면 표시용으로만 씁니다.
 - 차량 앱은 Vehicle SDK `Odometer.getRangeRemainingDistance()`(m)로 읽습니다. 연료차·전기차 구분은 `Fuel.getFuelPercent()`와 `EvBattery.getEvBatteryStateOfCharge()` 중 값이 나오는 쪽으로 판단합니다 (SDK 공개 API에 연료 종류 조회가 없음).
@@ -373,6 +393,7 @@ ACCEPTED → APPLIED  | FAILED
 | rest_area_menu | `uk_ram_ra_seq (std_rest_cd, seq)` UNIQUE | 휴게소별 메뉴 조회, 중복 방지 |
 | rest_area_menu | `idx_ram_name_key (std_rest_cd, name_key)` | Top5와 가격 연결 |
 | rest_area_top_item | PK `(std_rest_cd, base_month, rank_no)` | 휴게소의 이번 달 Top5 |
+| rest_area_place | `idx_rap_ra (std_rest_cd)` | 휴게소 지도의 장소 |
 | departure_call | `idx_dc_vehicle_status (vehicle_id, status)` | 차량의 `OPEN` 알림 찾기, 지난 대화 목록 |
 | departure_message | `idx_dm_call (call_id, id)` | 알림별 대화, `before={messageId}`로 위로 더 불러오기 |
 | departure_message | `idx_dm_sent (sent_at)` | 30일 지난 메시지 삭제 |

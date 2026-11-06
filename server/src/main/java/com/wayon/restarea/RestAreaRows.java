@@ -19,6 +19,12 @@ public final class RestAreaRows {
 	public record Brand(String brdName, String openTime, String closeTime) {
 	}
 
+	public record Place(String kakaoId, String name, String kind, BigDecimal lat, BigDecimal lng) {
+	}
+
+	public record Menu(String foodName, Integer price, boolean recommended, boolean best, boolean premium) {
+	}
+
 	public record Facility(String stdRestCd, String source, String psCode, String name, String detail,
 			String openTime, String closeTime) {
 	}
