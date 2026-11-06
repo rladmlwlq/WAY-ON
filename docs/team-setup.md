@@ -190,7 +190,7 @@ server/src/main/resources/
 |---|---|
 | Vite | 8.3.6 |
 | React, React DOM | 19.3.1 |
-| TypeScript | 7.0.2 |
+| TypeScript | 6.0.3 (7은 `tsserver`가 없어 IntelliJ에서 임포트 에러가 날 수 있음) |
 | `@vitejs/plugin-react` | 6.2.1 |
 | `@types/react`, `@types/react-dom` | 19.3.0 |
 | `@types/node` | 24.19.2 |
