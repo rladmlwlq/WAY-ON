@@ -222,19 +222,14 @@ npm install
      },
    },
    ```
-3. `web/.env.example`을 아래 내용으로 만듭니다 (이 파일만 커밋)
-   ```
-   VITE_API_URL=
-   VITE_KAKAO_JS_KEY=
-   ```
-4. `web/vercel.json`을 아래 내용으로 만듭니다 (새로고침해도 화면이 열리게 함)
+3. `web/vercel.json`을 아래 내용으로 만듭니다 (새로고침해도 화면이 열리게 함)
    ```json
    { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
    ```
-5. `web/package-lock.json`도 함께 커밋합니다
+4. `web/package-lock.json`도 함께 커밋합니다
 
 ### 5-3. 환경변수
-`web/.env.example`을 복사해 `web/.env.local`을 만듭니다.
+각자 `web/.env.local`을 만들고 아래 값을 넣습니다. 이 파일은 커밋하지 않습니다.
 
 | 변수 | 로컬 값 | Vercel 값 |
 |---|---|---|
@@ -285,7 +280,7 @@ npm install
 ---
 
 ## 7. 하지 말 것
-- API 키·서명 키(`*.jks`, `.env`, `.env.local`)를 새로 커밋하지 않기 (`.gitignore` 대상). `.env.example`에는 변수 이름만 적기
+- API 키·서명 키(`*.jks`, `.env`, `.env.local`)를 새로 커밋하지 않기 (`.gitignore` 대상)
 - `develop`에 직접 커밋하지 않기 (main에서 작업 → develop으로 머지)
 - 개인정보가 들어간 참가신청서 작성본을 `docs/`에 올리지 않기
 - 시스템 JAVA_HOME / PATH 변경하지 않기
