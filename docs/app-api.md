@@ -209,11 +209,11 @@ Response `200` (차에서 가까운 순)
 
 | type | `extId` | `detail` |
 |---|---|---|
-| `REST_AREA` | `ra:{rest_area.id}` | `{"routeName": "경부선", "direction": "서울방향", "top1": "말죽거리소고기국밥", "facilities": ["04", "12"], "hasGasStation": true}` |
+| `REST_AREA` | `ra:{std_rest_cd}` (`ra:000001`) | `{"routeName": "경부선", "direction": "서울방향", "top1": "말죽거리소고기국밥", "facilities": ["04", "12"], "hasGasStation": true}` |
 | `EV_CHARGER` | `ev:{stat_id}` | `{"operator": "환경부", "available": 2, "total": 4, "maxKw": 100, "accessLimited": false}` |
 | `GAS_STATION` | `opinet:{UNI_ID}` | `{"brand": "SKE", "gasoline": 1689, "diesel": 1559, "lpg": null}` (원/L) |
 | `RESTAURANT` (일반도로) | `kakao:{id}` | `{"category": "…", "phone": "…", "placeUrl": "…"}` |
-| `RESTAURANT` (고속도로) | `ra:{rest_area.id}` | `{"restAreaName": "경산(서울)휴게소", "topItems": [{"rank": 1, "name": "말죽거리소고기국밥", "price": 9000}]}` 휴게소 1곳이 1행 |
+| `RESTAURANT` (고속도로) | `ra:{std_rest_cd}` | `{"restAreaName": "경산(서울)휴게소", "topItems": [{"rank": 1, "name": "말죽거리소고기국밥", "price": 9000}]}` 휴게소 1곳이 1행 |
 
 - `RESTAURANT`는 **경로를 바꾸지 않고 들를 수 있는 곳만** 줍니다 (way-on.md 8.1 맛집 범위). 고속도로 구간은 앞쪽 휴게소의 판매 Top5(`ra:` 행, 우리 DB), 일반도로 구간은 **경로선 200m 안**의 카카오 식당(`kakao:` 행). 고속도로 구간은 길찾기 응답의 도로 이름으로 나눕니다 (api.md 11).
 - `offRouteM`: 경로선에서 떨어진 거리. 휴게소 행은 0.
@@ -222,11 +222,13 @@ Response `200` (차에서 가까운 순)
 
 ### 3-7. `GET /api/rest-areas/{restAreaId}` — 휴게소 상세 (N6, A1)
 
+`restAreaId`는 도로공사 휴게소 코드 6자리(`std_rest_cd`, 예: `000001`). 장소 `extId`의 `ra:` 뒤 값과 같습니다. 다시 적재해도 바뀌지 않습니다.
+
 동승자 토큰.
 
 Response `200`
 ```json
-{"restAreaId": 31, "name": "경산(서울)휴게소", "routeName": "경부선", "direction": "서울방향",
+{"restAreaId": "000048", "name": "경산(서울)휴게소", "routeName": "경부선", "direction": "서울방향",
  "lat": 35.86, "lng": 128.80,
  "topItems": [
    {"rank": 1, "name": "말죽거리소고기국밥", "store": "말죽거리한식당", "price": 9000},
@@ -239,6 +241,7 @@ Response `200`
 ```
 - `openNow`는 서버가 한국 시간으로 계산합니다. `close`가 `open`보다 이르면 다음 날까지로 봅니다.
 - `price`는 0502 메뉴와 이름이 맞을 때만 있습니다 (erd.md 휴게소 적재 규칙).
+- 없는 코드거나 6자리 숫자가 아니면 `404 PLACE_NOT_FOUND`.
 
 ### 3-8. `GET /api/health`
 
@@ -378,7 +381,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 ```json
 {"type": "restarea.approach", "data": {"requestId": 88}}
 ```
-서버는 `requestId`로 `waypoint_request.place_ext_id`(`ra:31`)를 찾아 폰들에게 `restarea.info`를 보냅니다.
+서버는 `requestId`로 `waypoint_request.place_ext_id`(`ra:000048`)를 찾아 폰들에게 `restarea.info`를 보냅니다.
 
 ### 5-10. `waypoint.accept`, `waypoint.reject` — 운전자 확인 (F3)
 
