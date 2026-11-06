@@ -306,8 +306,8 @@
 | 공공데이터 `DATA_GO_KR_KEY` | ✅ | 충전소 호출 확인. **주차장 데이터는 활용 신청 필요** |
 | 오피넷 `OPINET_KEY` | ✅ | 시연 기간 한도 증설 문의 필요 |
 | 카카오 `KAKAO_REST_KEY` | ✅ | 로컬 검색 호출 확인 |
-| 카카오 `KAKAO_JS_KEY` | ✅ | `localhost:8080`, `:5173` 등록. **Vercel 주소**·폰 테스트 주소 추가 필요 |
-| Vercel 프로젝트 | ⬜ | 저장소 연결, 웹 폴더 지정, `VITE_API_URL`·`VITE_KAKAO_JS_KEY` 설정 |
+| 카카오 `KAKAO_JS_KEY` | ✅ | `localhost:5173`, `https://way-on.vercel.app` 등록 확인. 폰 테스트 주소는 필요할 때 추가 |
+| Vercel 프로젝트 | ✅ | `https://way-on.vercel.app`. CLI 수동 배포. `VITE_KAKAO_JS_KEY` 등록 완료, `VITE_API_URL`은 서버 배포 후 |
 | 웹 푸시 VAPID 키 | ⬜ | A2 2단계. 개인 키는 서버 환경변수로만 보관 |
 | 카카오모빌리티 길찾기 | ✅ 발급 (개인 확인) | **`api.md`에 없음.** REST 키와 같은지 확인하고 규격 추가 필요 |
 | 에뮬레이터·개발 환경 | `team-setup.md` 참고 | JDK 21(서버), MySQL 8.4 |

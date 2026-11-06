@@ -172,7 +172,7 @@ server/src/main/resources/
 1. 팀에서 공유받은 키 파일을 **`server/.env`** 로 저장합니다 (파일 이름이 정확히 `.env`)
 2. 들어 있는 키: `EX_API_KEY`, `DATA_GO_KR_KEY`, `OPINET_KEY`, `KAKAO_REST_KEY`, `KAKAO_JS_KEY`, `SEOUL_DATA_KEY`. 규격은 `docs/api.md`
 
-> 아직 서버 코드가 이 파일을 읽지 않습니다. 외부 API 호출 코드를 만들 때 연결합니다.
+> 서버는 시작할 때 `server` 폴더의 이 파일을 읽습니다 (`application.properties`의 `spring.config.import`).
 
 ### 4-6. 폰 웹 연동 (구현할 때 추가)
 아직 서버에 없는 항목입니다. 작업하는 사람이 넣고, 이 매뉴얼에 결과를 적습니다.
@@ -257,10 +257,27 @@ npm install
 
 **배포 전 확인:** `npm run build`
 
-### 5-5. Vercel 배포 (한 사람이 한 번)
-1. Vercel에서 저장소를 연결하고 **Root Directory**를 `web`으로 지정
-2. 5-3의 환경변수 등록
-3. 운영 주소를 **카카오 JS SDK 도메인**과 **서버 허용 Origin**(4-6)에 등록. 미리보기 배포는 주소가 바뀌니 운영 주소만 등록
+### 5-5. Vercel 배포 (수동, 모아서 한 번에)
+운영 주소: https://way-on.vercel.app
+
+GitHub와 연결하지 않고 CLI로 직접 배포합니다. 푸시해도 자동으로 배포되지 않습니다. 배포하려면 way-on 프로젝트의 Vercel 계정으로 로그인해야 합니다.
+
+**등록된 환경변수:** `VITE_KAKAO_JS_KEY` (Production). `VITE_API_URL`은 서버를 배포한 뒤 등록합니다. 값은 Vercel 프로젝트의 **Settings > Environment Variables**에서 관리하고, 바꾼 값은 다음 배포부터 적용됩니다.
+
+**도메인 등록:** 운영 주소는 카카오 JS SDK 도메인에 등록되어 있습니다. 서버를 만들 때 **서버 허용 Origin**(4-6)에도 등록합니다. 미리보기 주소는 바뀌니 등록하지 않습니다.
+
+**처음 한 번만** (`web` 폴더에서)
+```
+npx vercel login
+npx vercel link
+```
+`link`에서는 새 프로젝트를 만들지 말고 기존 `way-on` 프로젝트를 고릅니다.
+
+**배포할 때마다**
+1. `develop`을 최신으로 받고, 커밋하지 않은 변경이 없는지 확인합니다. CLI는 내 PC의 파일을 그대로 올립니다.
+2. `web` 폴더에서 `npm run build`로 확인합니다.
+3. `npx vercel --prod`로 배포합니다.
+4. 운영 주소를 폰으로 열어 확인합니다.
 
 ---
 

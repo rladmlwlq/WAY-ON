@@ -755,7 +755,7 @@ Authorization: KakaoAK {KAKAO_REST_KEY}
 ## 6. Kakao Maps JavaScript SDK (동승자 웹 지도)
 
 - 키: `KAKAO_JS_KEY` (웹페이지에 노출되는 키. 등록 도메인에서만 동작)
-- 등록 도메인: `http://localhost:8080`, `http://localhost:5173`. 배포 주소와 폰 테스트용 PC IP는 필요할 때 추가
+- 등록 도메인: `http://localhost:5173`, `https://way-on.vercel.app` (2026-11-06 SDK 응답 200 확인). 폰 테스트용 PC IP는 필요할 때 추가
 - 카카오맵 사용 설정 ON 완료 (2026-11-04)
 - 로드: `<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey={KAKAO_JS_KEY}"></script>`
 
