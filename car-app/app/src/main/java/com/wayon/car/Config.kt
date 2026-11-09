@@ -23,5 +23,6 @@ object Config {
     const val PING_INTERVAL_MS = 20_000L
     const val RECONNECT_MAX_MS = 30_000L             // 1·2·4 … 최대 30초
     const val FAIL_TOAST_MS = 3_000L                 // "추가하지 못했어요"
-    const val VOICE_LEAD_SILENCE_MS = 200L           // 음성 앞 묵음
+    const val VOICE_LEAD_SILENCE_MS = 200L           // 음성 앞 묵음 (Pleos 권장 150~200ms)
+    const val VOICE_MAX_MS = 15_000L                 // 끝 콜백이 안 와도 이만큼 지나면 포커스를 놓음
 }

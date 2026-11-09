@@ -10,8 +10,7 @@
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
     <!-- 경유지 추가·목적지 변경 addWaypoint, requestRoute (normal). NaviHelper 3.0.5 소스로 확인 -->
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
-    <!-- FusedLocation 위치 (dangerous: 런타임 요청) -->
-    <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
+    <!-- 위치는 NaviHelper로만 받음. FusedLocation은 쓰지 않아 권한도 뺌 (심사 가이드 "권한 최소화") -->
     <!-- 주행 가능 거리·기어 (normal) -->
     <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
     <!-- 연료·배터리 % (normal) -->
@@ -31,6 +30,11 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+
+        <!-- 주행 규제(CarUxRestrictions). 없는 기기여도 설치되게 required=false, 없으면 기어로만 판단 -->
+        <uses-library
+            android:name="android.car"
+            android:required="false" />
 
         <activity
             android:name=".MainActivity"
