@@ -19,6 +19,10 @@ public final class RestAreaRows {
 	public record Brand(String brdName, String openTime, String closeTime) {
 	}
 
+	/** 카카오 장소 → 그 장소가 있는 휴게소 */
+	public record KakaoMatch(String kakaoId, String stdRestCd) {
+	}
+
 	public record Place(String kakaoId, String name, String kind, BigDecimal lat, BigDecimal lng) {
 	}
 

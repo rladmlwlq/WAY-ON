@@ -102,7 +102,33 @@ export function connect(code: string, nickname: string, locationConsent: boolean
   })
 }
 
+/** 3-10 검색 결과 1개. url은 카카오맵 모바일 웹(앱 없이 열림). restAreaId가 있으면 휴게소 안 매장 */
+export interface SearchPlace {
+  id: string
+  name: string
+  category: string | null
+  phone: string | null
+  address: string | null
+  lat: number
+  lng: number
+  distM: number | null
+  url: string
+  restAreaId: string | null
+}
+
+const auth = (token: string) => ({ headers: { Authorization: `Bearer ${token}` } })
+
+/** 3-10 차 위치 근처 장소 검색 (카카오) */
+export function searchPlaces(token: string, query: string) {
+  return request<{ places: SearchPlace[] }>(`/api/search/places?query=${encodeURIComponent(query)}`, auth(token))
+}
+
+/** 3-7 휴게소 상세 (메뉴·영업 중 매장) */
+export function getRestArea(restAreaId: string) {
+  return request<RestAreaDetail>(`/api/rest-areas/${encodeURIComponent(restAreaId)}`)
+}
+
 /** 3-2 토큰 확인. 401이면 토큰이 만료·해제된 것 */
 export function getMe(token: string) {
-  return request<Me>('/api/passengers/me', { headers: { Authorization: `Bearer ${token}` } })
+  return request<Me>('/api/passengers/me', auth(token))
 }

@@ -36,6 +36,8 @@ import androidx.compose.material3.lightColorScheme
 import com.wayon.car.ui.Blue
 import com.wayon.car.ui.HomeScreen
 import com.wayon.car.ui.PassengersScreen
+import com.wayon.car.ui.RequestScreen
+import androidx.compose.foundation.layout.Box
 import com.wayon.car.ui.QrScreen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -84,27 +86,33 @@ class MainActivity : ComponentActivity() {
                     // 동승자 관리는 화면에서만 여닫는다. 정차 중에만 보이고, QR처럼 주행하면 닫는다 (4-6)
                     var managing by remember { mutableStateOf(false) }
                     LaunchedEffect(state.parked) { if (!state.parked) managing = false }
-                    Column {
-                        // 모든 화면 위 오프라인 띠 (4장, 7-2)
-                        if (!state.server.online) OfflineBar()
-                        when {
-                            managing && state.parked -> PassengersScreen(
-                                state.server.passengers,
-                                onBack = { managing = false },
-                                onRemove = { service?.removePassenger(it) },
-                            )
-                            state.server.qr != null && state.parked -> QrScreen(
-                                state,
-                                onBack = { service?.closeQr() },
-                                onRenew = { service?.openQr() },
-                                onManage = { managing = true },
-                            )
-                            else -> HomeScreen(
-                                state,
-                                onOpenQr = { service?.openQr() },
-                                onConsent = { service?.giveLocationConsent() },
-                                onManage = { managing = true },
-                            )
+                    Box {
+                        Column {
+                            // 모든 화면 위 오프라인 띠 (4장, 7-2)
+                            if (!state.server.online) OfflineBar()
+                            when {
+                                managing && state.parked -> PassengersScreen(
+                                    state.server.passengers,
+                                    onBack = { managing = false },
+                                    onRemove = { service?.removePassenger(it) },
+                                )
+                                state.server.qr != null && state.parked -> QrScreen(
+                                    state,
+                                    onBack = { service?.closeQr() },
+                                    onRenew = { service?.openQr() },
+                                    onManage = { managing = true },
+                                )
+                                else -> HomeScreen(
+                                    state,
+                                    onOpenQr = { service?.openQr() },
+                                    onConsent = { service?.giveLocationConsent() },
+                                    onManage = { managing = true },
+                                )
+                            }
+                        }
+                        // 경유지 요청 수락 (4-3): 어느 화면이든 그 위에, 주행 중에도
+                        state.server.request?.let {
+                            RequestScreen(it, onAccept = { service?.acceptRequest() }, onReject = { service?.rejectRequest() })
                         }
                     }
                 }

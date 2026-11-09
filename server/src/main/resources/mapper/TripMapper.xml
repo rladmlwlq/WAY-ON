@@ -41,6 +41,58 @@
 		VALUES (#{tripId}, #{passengerId}, #{now}, #{now})
 	</insert>
 
+	<update id="update_tripLocation">
+		UPDATE trip SET last_lat = #{lat}, last_lng = #{lng}, last_heading = #{heading}, last_reported_at = #{now}
+		WHERE vehicle_id = #{vehicleId} AND status = 'ACTIVE'
+	</update>
+
+	<update id="update_tripEnergy">
+		UPDATE trip SET energy_type = #{energyType}, energy_pct = #{energyPct}, range_m = #{rangeM}
+		WHERE vehicle_id = #{vehicleId} AND status = 'ACTIVE'
+	</update>
+
+	<update id="update_tripDestination">
+		UPDATE trip SET dest_name = #{name}, dest_lat = #{lat}, dest_lng = #{lng}
+		WHERE vehicle_id = #{vehicleId} AND status = 'ACTIVE'
+	</update>
+
+	<select id="select_carPosition" resultType="com.wayon.trip.TripRows$CarPosition">
+		SELECT last_lat AS lat, last_lng AS lng
+		FROM trip
+		WHERE vehicle_id = #{vehicleId} AND status = 'ACTIVE' AND last_lat IS NOT NULL
+		ORDER BY id DESC
+		LIMIT 1
+	</select>
+
+	<!-- 6-1 경유지 요청. row: tripId, passengerId, placeType, extId, name, address, lat, lng, action, now → id -->
+	<insert id="insert_waypointRequest" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+		INSERT INTO waypoint_request (trip_id, passenger_id, place_type, place_ext_id, poi_name, address, lat, lng,
+			action, status, requested_at)
+		VALUES (#{tripId}, #{passengerId}, #{placeType}, #{extId}, #{name}, #{address}, #{lat}, #{lng},
+			#{action}, 'PENDING', #{now})
+	</insert>
+
+	<select id="select_pendingRequestIds" resultType="long">
+		SELECT id FROM waypoint_request WHERE trip_id = #{tripId} AND status = 'PENDING'
+	</select>
+
+	<!-- 이 차량의 요청이고 지금 상태가 from일 때만 바꾼다. requestedSince가 있으면 그 뒤에 온 요청만 (10초 안 수락) -->
+	<update id="update_requestStatus">
+		UPDATE waypoint_request wr JOIN trip t ON t.id = wr.trip_id
+		SET wr.status = #{to}, wr.decided_at = #{now}, wr.fail_reason = #{failReason}
+		WHERE wr.id = #{requestId} AND t.vehicle_id = #{vehicleId} AND wr.status = #{from}
+			<if test="requestedSince != null">AND wr.requested_at &gt;= #{requestedSince}</if>
+	</update>
+
+	<select id="select_request" resultType="com.wayon.trip.TripRows$Request">
+		SELECT wr.id, t.vehicle_id, wr.place_type, wr.place_ext_id, wr.poi_name, wr.address, wr.lat, wr.lng,
+			wr.action, wr.status, wr.requested_at, wr.fail_reason, p.nickname AS requested_by
+		FROM waypoint_request wr
+		JOIN trip t ON t.id = wr.trip_id
+		JOIN passenger p ON p.id = wr.passenger_id
+		WHERE wr.id = #{requestId}
+	</select>
+
 	<select id="select_restAreaRequestExtId" resultType="string">
 		SELECT wr.place_ext_id
 		FROM waypoint_request wr

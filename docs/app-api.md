@@ -282,6 +282,26 @@ Response `200`
 - `otherStores`: 위치를 못 찾은 0501 매장과 판매순위 매장
 - 없는 코드면 `404 PLACE_NOT_FOUND`
 
+### 3-10. `GET /api/search/places?query={검색어}` — 주변 장소 검색 (2026-11-09 추가)
+
+동승자 토큰. 폰 검색창에서 부릅니다. 서버가 카카오 키워드 검색(api.md 5)을 대신 부릅니다 (REST 키를 폰에 노출하지 않음).
+- 중심: 그 차량 ACTIVE 세션의 마지막 차 위치(5-3), 반경 20km, 정확도순 15개. 위치가 없으면 전국에서 찾습니다
+- `query`: 1~50자 (앞뒤 공백 제거)
+
+Response `200`
+```json
+{"places": [
+  {"id": "kk:2084343848", "name": "곰작골나주곰탕 안성휴게소서울방향점", "category": "곰작골나주곰탕",
+   "phone": "031-611-5793", "address": "경기 안성시 원곡면 경부고속도로 372", "lat": 37.0767, "lng": 127.1324,
+   "distM": 71, "url": "https://place.map.kakao.com/2084343848", "restAreaId": "000048"}]}
+```
+- `category`: 카카오 분류의 마지막 칸 (`음식점 > 한식 > 국밥` → `국밥`)
+- `address`: 도로명, 없으면 지번. `distM`: 차와의 거리, 중심이 없으면 null
+- `url`: 카카오맵 장소 페이지 (`https`). **평점·영업시간·메뉴 사진은 카카오 API가 주지 않아** 이 페이지에서 봅니다. 앱이 없으면 모바일 웹으로 열립니다 (2026-11-09 확인)
+- `restAreaId`: 휴게소 안 매장(`rest_area_place.kakao_id`)이면 그 휴게소 코드. 폰은 3-7로 인기 메뉴·영업 중 매장을 덧붙입니다
+- 오류: 토큰 `401`/`403`, 검색어 `400 BAD_REQUEST`, 카카오 실패·키 없음 `503 EXTERNAL_UNAVAILABLE`
+- 폰은 고른 장소의 `id`를 그대로 6-1 `waypoint.propose`의 `extId`로 보냅니다
+
 ---
 
 ## 4. WebSocket 공통
@@ -464,6 +484,13 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 - 응답 `ack {"requestId": 88}`. 이전 `PENDING` 요청이 있으면 그것을 `EXPIRED`로 바꾸고 새 요청을 받습니다 (마지막 요청 우선, way-on.md 5장 6번).
 - 장소 정보는 폰이 보낸 값을 그대로 저장하지 않고, **서버가 `extId`로 다시 찾은 값**을 저장합니다 (폰이 좌표를 바꿔 보내는 것 방지). 다시 못 찾으면 `error PLACE_NOT_FOUND`.
 
+> **구현 (2026-11-09)**: 폰은 3-10 검색 결과를 `{"place": {"extId": "kk:{카카오 ID}", "name", "lat", "lng"}}`로 보냅니다 (`type`은 보내지 않음, 서버가 정함).
+> - `kk:`: 카카오에 ID 조회 API가 없어서, 폰이 준 이름으로 그 좌표 근처를 다시 검색해 **같은 ID가 나오면** 그 결과의 이름·주소·좌표를 저장합니다. 종류는 카카오 분류로 정합니다: `PK6` → `PARKING`, `OL7` → `GAS_STATION`, 그 밖 → `RESTAURANT`
+> - 휴게소 안 매장(`rest_area_place`)이면 **그 휴게소(`REST_AREA`, `ra:{코드}`)로 바꿔** 넣습니다. 경유지는 휴게소가 되고 도착 안내(5-9, A1)가 그대로 동작합니다
+> - `ra:{코드}`도 받습니다 (3-6 목록용)
+> - 경유지 수는 차가 마지막으로 보낸 `car.route`(5-4)로 셉니다
+> - `action`이 `ADD`인데 경유지가 이미 2개면 `WAYPOINT_FULL`. 세션이 없으면 `TRIP_NOT_ACTIVE`, 차량 토큰이면 `FORBIDDEN_ROLE`
+
 ### 6-2. `departure.message` — 출발해요 답장
 
 ```json
@@ -487,7 +514,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 | `passengers.update` | 차 | `{"passengers": [{"passengerId", "nickname", "online", "pushEnabled"}]}` 연결·끊김·해제 때 |
 | `waypoint.request` | 차 | 아래 7-2 |
 | `waypoint.expired` | 차 | `{"requestId": 88}` 10초 초과 또는 새 요청이 와서 밀림 → 수락 화면 닫기 |
-| `waypoint.status` | 폰 | `{"requestId": 88, "status": "APPLIED", "failReason": null}` 상태가 바뀔 때마다. 모든 동승자에게 (누가 요청했는지 `requestedBy` 닉네임 포함) |
+| `waypoint.status` | 폰 | `{"requestId": 88, "status": "APPLIED", "failReason": null, "requestedBy": "민지", "placeName": "경산(서울)휴게소", "action": "ADD"}` 상태가 바뀔 때마다. 모든 동승자에게 |
 | `energy.suggest` | 폰 (없으면 차) | `{"energyType", "rangeM", "remainDistM", "places": [3-6의 place …]}` |
 | `parking.suggest` | 폰 (없으면 차) | 가까운 순으로 보냄. 폰에서 **가까운 순 / 싼 순**(`fee1h`, NULL은 맨 뒤)을 바꿔 봄 (way-on.md 8.1). `{"destName", "places": [{"extId": "pl:5120", "name", "address", "lat", "lng", "distM", "fee1h", "feeType", "totalSpaces", "nowParked", "openNow"}]}` |
 | `restarea.info` | 폰 | `{"phase": "APPROACH" \| "ARRIVED" \| "LEFT", "restArea": 3-7 응답과 같은 모양}` (`LEFT`는 `restArea` 없이 닫기만) |
@@ -521,6 +548,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
   "action": "ADD",
   "expiresAt": "2026-11-05T08:20:10.000Z"}}
 ```
+- `place.extId`도 붙습니다 (2026-11-09 추가). 차량 앱이 `myWaypoints`에 저장해 휴게소 도착 카드에 씁니다
 - `action`은 `ADD` | `SET_DEST`. `SET_DEST`면 차 화면에 "목적지를 ○○로 바꿀까요?"
 - 주행 중에도 보냅니다. 수락 화면은 DO 화면으로 짧게 (way-on.md 3.5).
 
