@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiError, getMe, type Me } from './api'
 import { Notice } from './Notice'
+import { RestAreaCard } from './RestAreaCard'
 import { useTripSocket } from './useTripSocket'
 
 // 연결 완료 화면. 토큰이 있으면 열 때마다 자동 재연결 (docs/app-api.md 1장 F5, 3-2)
@@ -43,6 +44,8 @@ export function TripScreen({ token, onSignedOut }: Props) {
       <main className="screen" inert={ended !== null}>
         <header className="brand">WAY:ON</header>
         <h1>{me ? `${me.nickname}님, 연결됐어요` : '연결됐어요'}</h1>
+
+        {socket.restArea && <RestAreaCard info={socket.restArea} />}
 
         <section className="card" aria-live="polite">
           <div className="status">

@@ -12,6 +12,8 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.wayon.common.ApiException;
+
 /** 주행 세션 시작·끝·만료 (app-api.md 4-3, 5-1, 5-2). 차량 앱 메시지가 5분 없으면 EXPIRED */
 @Service
 public class TripService {
@@ -78,6 +80,18 @@ public class TripService {
 		if (trip != null) {
 			mapper.insert_tripPassenger(trip.id(), passengerId, now());
 		}
+	}
+
+	/**
+	 * 5-9. 차가 보낸 requestId가 이 차량의 휴게소 경유지 요청인지 보고 place_ext_id를 돌려준다.
+	 * 지금 세션이 아니어도 된다 (휴게소에서 시동을 껐다 켜면 세션이 바뀌어도 떠남은 보내야 함)
+	 */
+	public String select_restAreaExtId(long vehicleId, long requestId) {
+		String extId = mapper.select_restAreaRequestExtId(requestId, vehicleId);
+		if (extId == null) {
+			throw ApiException.placeNotFound();
+		}
+		return extId;
 	}
 
 	private LocalDateTime now() {

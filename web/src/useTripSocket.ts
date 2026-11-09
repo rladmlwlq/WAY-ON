@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { wsUrl } from './api'
+import { wsUrl, type RestAreaInfo } from './api'
 
 // 서버 WebSocket (docs/app-api.md 4장): 첫 메시지 auth, 20초 ping, 끊기면 1·2·4…30초 간격으로 다시 접속
+// 휴게소 안내(restarea.info, A1)도 여기서 받는다
 
 export interface Trip {
   tripId: string
@@ -20,8 +21,14 @@ export type SocketState =
 const PING_MS = 20_000
 const MAX_RETRY_MS = 30_000
 
-export function useTripSocket(token: string): SocketState {
+export type TripSocket = SocketState & {
+  /** 접근·도착한 휴게소. 떠나거나(LEFT) 세션이 끝나면 null */
+  restArea: RestAreaInfo | null
+}
+
+export function useTripSocket(token: string): TripSocket {
   const [state, setState] = useState<SocketState>({ status: 'connecting' })
+  const [restArea, setRestArea] = useState<RestAreaInfo | null>(null)
 
   useEffect(() => {
     let ws: WebSocket | null = null
@@ -35,7 +42,7 @@ export function useTripSocket(token: string): SocketState {
       ws = socket
       socket.onopen = () => socket.send(JSON.stringify({ type: 'auth', data: { token } }))
       socket.onmessage = (e) => {
-        let m: { type?: string; data?: { trip?: Trip | null } & Partial<Trip> }
+        let m: { type?: string; data?: { trip?: Trip | null } & Partial<Trip> & Partial<RestAreaInfo> }
         try {
           m = JSON.parse(e.data)
         } catch {
@@ -50,6 +57,10 @@ export function useTripSocket(token: string): SocketState {
           setState({ status: 'online', trip: { tripId: m.data.tripId, startedAt: m.data.startedAt ?? '' } })
         } else if (m.type === 'trip.ended') {
           setState({ status: 'online', trip: null })
+          setRestArea(null)
+        } else if (m.type === 'restarea.info') {
+          const { phase, restArea: detail } = m.data ?? {}
+          setRestArea((phase === 'APPROACH' || phase === 'ARRIVED') && detail ? { phase, restArea: detail } : null)
         }
       }
       socket.onclose = (e) => {
@@ -78,5 +89,5 @@ export function useTripSocket(token: string): SocketState {
     }
   }, [token])
 
-  return state
+  return { ...state, restArea }
 }
