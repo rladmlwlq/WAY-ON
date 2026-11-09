@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wayon.trip.TripMapper">
+
+	<select id="select_activeTrip" resultType="com.wayon.trip.TripRows$Trip">
+		SELECT id, public_id, vehicle_id, created_at
+		FROM trip
+		WHERE vehicle_id = #{vehicleId} AND status = 'ACTIVE'
+		ORDER BY id DESC
+		LIMIT 1
+	</select>
+
+	<insert id="insert_trip">
+		INSERT INTO trip (public_id, vehicle_id, status, car_consented_at, created_at, last_activity_at)
+		VALUES (#{publicId}, #{vehicleId}, 'ACTIVE', #{now}, #{now}, #{now})
+	</insert>
+
+	<update id="update_tripClosed">
+		UPDATE trip
+		SET status = #{status}, ended_at = #{now},
+			dest_name = NULL, dest_lat = NULL, dest_lng = NULL,
+			last_lat = NULL, last_lng = NULL, last_heading = NULL, last_reported_at = NULL,
+			energy_type = NULL, energy_pct = NULL, range_m = NULL
+		WHERE id = #{tripId} AND status = 'ACTIVE'
+			<if test="idleBefore != null">AND last_activity_at &lt; #{idleBefore}</if>
+	</update>
+
+	<update id="update_tripActivity">
+		UPDATE trip SET last_activity_at = #{now}
+		WHERE vehicle_id = #{vehicleId} AND status = 'ACTIVE'
+	</update>
+
+	<select id="select_idleTrips" resultType="com.wayon.trip.TripRows$Trip">
+		SELECT id, public_id, vehicle_id, created_at
+		FROM trip
+		WHERE status = 'ACTIVE' AND last_activity_at &lt; #{idleBefore}
+	</select>
+
+	<insert id="insert_tripPassenger">
+		INSERT IGNORE INTO trip_passenger (trip_id, passenger_id, joined_at, consented_at)
+		VALUES (#{tripId}, #{passengerId}, #{now}, #{now})
+	</insert>
+</mapper>

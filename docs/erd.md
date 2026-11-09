@@ -7,7 +7,7 @@
 ```mermaid
 erDiagram
     VEHICLE ||--o{ PASSENGER : "등록된 동승자"
-    VEHICLE ||--o{ CONNECT_CODE : "일회용 연결 코드"
+    VEHICLE ||--o{ CONNECT_CODE : "연결 코드"
     VEHICLE ||--o{ TRIP : "주행 세션"
     TRIP ||--o{ TRIP_PASSENGER : "이번 세션 연결"
     PASSENGER ||--o{ TRIP_PASSENGER : "참여"
@@ -258,7 +258,7 @@ erDiagram
 |---|---|---|
 | `vehicle` | 차량 앱 설치 1개 | 등록 데이터. 차량 토큰 해시 보관 |
 | `passenger` | 차량에 등록된 동승자 1명 | 등록 데이터. 자동 재연결용. 차량 앱에서 해제할 때까지 |
-| `connect_code` | 일회용 연결 코드 1개 (QR 토큰 또는 4자리 코드) | 임시 데이터. 사용·만료되면 삭제 |
+| `connect_code` | 연결 코드 1개 (QR 토큰은 3분 동안 여러 명, 4자리 코드는 미정) | 임시 데이터. 새로 발급하면 이전 것 삭제. `used_at`은 QR에서 안 씀 |
 | `trip` | 주행 세션 1건 (차 1대 ↔ 동승자 폰들) | 운행 데이터. 종료·만료 시 위치·목적지·에너지 값 삭제 |
 | `trip_passenger` | 세션에 연결된 동승자 1명과 위치 공유 동의 | 운행 데이터 |
 | `waypoint_request` | 동승자의 경유지 요청 1건과 운전자 결정 | 운행 데이터. 요청 당시 장소 정보를 그대로 저장 |

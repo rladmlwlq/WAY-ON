@@ -31,11 +31,11 @@ CREATE TABLE connect_code (
   kind        VARCHAR(5)  NOT NULL COMMENT '종류',                     -- QR / PIN
   code_hash   CHAR(64)    NOT NULL COMMENT '코드 해시(SHA-256)',
   expires_at  DATETIME(3) NOT NULL COMMENT '만료 시각',
-  used_at     DATETIME(3) COMMENT '사용 시각',                        -- 한 번 쓰면 폐기
+  used_at     DATETIME(3) COMMENT '사용 시각',                        -- QR은 안 씀 (만료 전까지 여러 명 연결). PIN 결정 후 정리
   fail_count  SMALLINT    NOT NULL DEFAULT 0 COMMENT '실패 횟수',      -- 4자리 PIN 대입 공격 제한
   CONSTRAINT fk_cc_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicle(id),
   INDEX idx_cc_lookup (kind, code_hash, expires_at)
-) COMMENT '일회용 연결 코드 (QR 토큰, 4자리 코드)';
+) COMMENT '연결 코드 (QR 토큰 3분·여러 명, 4자리 코드)';
 
 CREATE TABLE trip (
   id                     BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '세션 ID',

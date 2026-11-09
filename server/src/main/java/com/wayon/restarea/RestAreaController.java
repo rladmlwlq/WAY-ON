@@ -20,13 +20,13 @@ public class RestAreaController {
 	}
 
 	@GetMapping("/{restAreaId}")
-	public RestAreaDto.Detail detail(@PathVariable String restAreaId) {
+	public RestAreaDto.Detail select_restArea(@PathVariable String restAreaId) {
 		return service.detail(restAreaId);
 	}
 
 	/** 3-9 휴게소 지도: 매장 실제 위치 + 매장별 정보 + 건물(식당가·위치 모르는 매장·편의시설) */
 	@GetMapping("/{restAreaId}/map")
-	public RestAreaDto.MapView map(@PathVariable String restAreaId) {
+	public RestAreaDto.MapView select_restAreaMap(@PathVariable String restAreaId) {
 		return service.map(restAreaId);
 	}
 }
