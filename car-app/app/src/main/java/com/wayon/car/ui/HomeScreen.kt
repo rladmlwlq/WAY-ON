@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,12 +19,17 @@ import com.wayon.car.service.AppState
 import com.wayon.car.service.ArrivedCard
 
 /**
- * 홈 (car-app-design.md 4-1). 지금은 목적지 남은 시간과 휴게소 안내만 있다.
- * 동승자 줄, [출발해요]·[동승자 연결]·[주변 장소] 버튼은 그 기능을 붙일 때 더한다.
+ * 홈 (car-app-design.md 4-1). 동승자 줄, 목적지 남은 시간, 휴게소 안내, 정차 중 [동승자 연결].
+ * [출발해요]·[주변 장소] 버튼은 그 기능을 붙일 때 더한다.
  * 주행 중에는 짧은 문구만 보인다. 휴게소에 도착(기어 P)하면 휴게소 지도로 바뀐다 (4-7).
  */
 @Composable
-fun HomeScreen(state: AppState, modifier: Modifier = Modifier) {
+fun HomeScreen(
+    state: AppState,
+    modifier: Modifier = Modifier,
+    onOpenQr: () -> Unit = {},
+    onConsent: () -> Unit = {},
+) {
     val arrived = state.restArea.arrived
     // 도착은 내비 도착 콜백으로 달리는 중에도 생길 수 있다. 정차(기어 P, 주행 규제 없음)일 때만 지도를 연다
     val map = arrived?.map
@@ -46,7 +52,10 @@ fun HomeScreen(state: AppState, modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
+        val server = state.server
         Text("WAY:ON", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+
+        Text(passengersLine(state), style = MaterialTheme.typography.titleLarge)
 
         Text(destinationLine(state), style = MaterialTheme.typography.titleLarge)
 
@@ -54,8 +63,44 @@ fun HomeScreen(state: AppState, modifier: Modifier = Modifier) {
             Text("곧 $it", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         }
 
+        server.notice?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
+
         // 지도 정보를 받기 전이거나 못 받았을 때
         if (state.parked && arrived != null) LoadingCard(arrived)
+
+        // 버튼은 정차 중에만 (4-1). 동의 전에는 세션을 열 수 없어 동의부터 (7-3)
+        if (state.parked) {
+            if (!server.locationConsent) {
+                ConsentCard(onConsent)
+            } else {
+                Button(onClick = onOpenQr) { Text("동승자 연결", style = MaterialTheme.typography.titleLarge) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConsentCard(onConsent: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("위치 공유에 동의해야 동승자와 연결돼요", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "연결된 동승자 폰에 이 차의 현재 위치와 경로가 보여요. 위치 기록은 남기지 않아요.",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Button(onClick = onConsent) { Text("동의하기", style = MaterialTheme.typography.titleMedium) }
+        }
+    }
+}
+
+/** 주행 중에도 보이는 한 줄 (4-1). 사람 수는 지금 폰이 붙어 있는 동승자 */
+private fun passengersLine(state: AppState): String {
+    val server = state.server
+    val online = server.onlinePassengers
+    return when {
+        server.locationConsent && server.online && server.trip == null -> "연결 준비 중"
+        online.isEmpty() -> "연결된 동승자 없음"
+        else -> "동승자 ${online.size}명 연결됨 · ${online.joinToString(" · ") { it.nickname }}"
     }
 }
 

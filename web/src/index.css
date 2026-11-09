@@ -1,51 +1,36 @@
+/* 차량 앱 QR 화면(QrScreen.kt)과 같은 색. 차량 화면이 밝은 색 하나라 다크 모드는 두지 않는다 */
 :root {
-  --text: #4b4757;
-  --text-h: #0d0b14;
-  --muted: #6b6578;
-  --bg: #f6f5f8;
+  --text: #374151;
+  --text-h: #14213d;
+  --muted: #6b7280;
+  --bg: #f7f9fc;
+  --bg-end: #eaf0fb;
   --surface: #fff;
-  --border: #e3e1e8;
-  --accent: #6b2fd6;
+  --field: #f3f6fb;
+  --border: #dce3ef;
+  --accent: #2b6cf6;
   --accent-text: #fff;
   --ok: #1f9d55;
   --wait: #d08a00;
-  --off: #8a8595;
+  --off: #9aa3b2;
   --danger: #c62828;
   --danger-bg: #fdecec;
-  --notice-bg: #fff6df;
+  --notice-bg: #e8f0ff;
 
   --sans: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', Roboto, sans-serif;
 
   font: 16px/1.5 var(--sans);
-  color-scheme: light dark;
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #c9c5d3;
-    --text-h: #f4f2f8;
-    --muted: #9a95a8;
-    --bg: #121117;
-    --surface: #1c1b23;
-    --border: #2e2c38;
-    --accent: #a77bff;
-    --accent-text: #120a22;
-    --ok: #4ccf86;
-    --wait: #f0b43c;
-    --off: #8a8595;
-    --danger: #ff7b7b;
-    --danger-bg: #3a1c1f;
-    --notice-bg: #33290f;
-  }
-}
-
 body {
   margin: 0;
-  background: var(--bg);
+  min-height: 100svh;
+  background: linear-gradient(var(--bg), var(--bg-end)) fixed;
 }
 
 h1 {
