@@ -25,4 +25,7 @@ public interface TripMapper {
 
 	int insert_tripPassenger(@Param("tripId") long tripId, @Param("passengerId") long passengerId,
 			@Param("now") LocalDateTime now);
+
+	/** 이 차량 세션의 휴게소 경유지 요청이면 place_ext_id(`ra:000048`), 아니면 null */
+	String select_restAreaRequestExtId(@Param("requestId") long requestId, @Param("vehicleId") long vehicleId);
 }

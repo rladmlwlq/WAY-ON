@@ -16,6 +16,8 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.wayon.common.ApiException;
+import com.wayon.restarea.RestAreaDto;
+import com.wayon.restarea.RestAreaService;
 import com.wayon.trip.TripService;
 import com.wayon.vehicle.VehicleService;
 
@@ -24,7 +26,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * /ws (app-api.md 4장): 첫 메시지 인증, ping, 세션 시작·끝, 5분 무통신 만료.
+ * /ws (app-api.md 4장): 첫 메시지 인증, ping, 세션 시작·끝, 5분 무통신 만료, 휴게소 접근·도착·떠남(5-9).
  * 세션이 끝나도 동승자 연결은 닫지 않고 trip.ended만 보낸다 (4-3의 4410은 쓰지 않음, 9장 정하지 않은 것)
  */
 @Component
@@ -37,13 +39,16 @@ public class WsHandler extends TextWebSocketHandler {
 	private final WsSessions sessions;
 	private final VehicleService vehicles;
 	private final TripService trips;
+	private final RestAreaService restAreas;
 	private final JsonMapper json;
 	private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor();
 
-	public WsHandler(WsSessions sessions, VehicleService vehicles, TripService trips, JsonMapper json) {
+	public WsHandler(WsSessions sessions, VehicleService vehicles, TripService trips, RestAreaService restAreas,
+			JsonMapper json) {
 		this.sessions = sessions;
 		this.vehicles = vehicles;
 		this.trips = trips;
+		this.restAreas = restAreas;
 		this.json = json;
 		timer.scheduleWithFixedDelay(this::expireTrips, EXPIRE_CHECK_S, EXPIRE_CHECK_S, TimeUnit.SECONDS);
 	}
@@ -83,6 +88,9 @@ public class WsHandler extends TextWebSocketHandler {
 				case "ping" -> sessions.send(session, "pong", null, null);
 				case "trip.start" -> tripStart(session, requireCar(client), reqId, data);
 				case "trip.end" -> tripEnd(session, requireCar(client), reqId);
+				case "restarea.approach" -> restArea(session, requireCar(client), reqId, data, RestAreaDto.Phase.APPROACH);
+				case "restarea.arrived" -> restArea(session, requireCar(client), reqId, data, RestAreaDto.Phase.ARRIVED);
+				case "restarea.left" -> restArea(session, requireCar(client), reqId, data, RestAreaDto.Phase.LEFT);
 				default -> throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "요청 형식이 맞지 않아요");
 			}
 		} catch (ApiException e) {
@@ -152,6 +160,20 @@ public class WsHandler extends TextWebSocketHandler {
 		if (trips.save_tripEnd(vehicleId)) {
 			sessions.sendToPassengers(vehicleId, "trip.ended", Map.of("reason", "ENDED"));
 		}
+		ack(session, reqId, Map.of());
+	}
+
+	/**
+	 * 5-9 → 7장 restarea.info. 경유지로 넣은 휴게소만 (requestId가 이 차량의 휴게소 요청).
+	 * 받는 사람은 지금 붙어 있는 동승자. 폰은 접근·도착이면 카드를 띄우고 LEFT면 닫는다
+	 */
+	private void restArea(WebSocketSession session, long vehicleId, String reqId, Map<?, ?> data,
+			RestAreaDto.Phase phase) {
+		if (!(data.get("requestId") instanceof Number requestId)) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "요청 형식이 맞지 않아요");
+		}
+		String extId = trips.select_restAreaExtId(vehicleId, requestId.longValue());
+		sessions.sendToPassengers(vehicleId, "restarea.info", restAreas.info(phase, extId));
 		ack(session, reqId, Map.of());
 	}
 
