@@ -51,7 +51,7 @@ export function JoinScreen({ code, onConnected }: Props) {
       <main className="screen">
         <header className="brand">WAY:ON</header>
         <h1>차량에 연결하기</h1>
-        <p className="lead">운전자에게 장소를 보내고, 차의 경로를 이 폰에서 볼 수 있어요.</p>
+        <p className="lead">운전자에게 장소를 보내고,차의 경로를 이 폰에서 볼 수 있어요.</p>
 
         <form className="card" onSubmit={submit}>
           <fieldset className="plain" disabled={deadCode}>
@@ -60,7 +60,7 @@ export function JoinScreen({ code, onConnected }: Props) {
               <input
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                placeholder="예: 민지"
+                placeholder="ex: WAY:ON"
                 maxLength={20}
                 autoComplete="nickname"
                 enterKeyHint="done"

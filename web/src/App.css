@@ -12,7 +12,7 @@
 .brand {
   font-weight: 800;
   letter-spacing: 0.04em;
-  color: var(--accent);
+  color: var(--text-h);
 }
 
 .lead {
@@ -27,6 +27,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
+  box-shadow: 0 6px 20px rgb(43 108 246 / 0.08);
 }
 
 fieldset.plain {
@@ -58,7 +59,7 @@ fieldset.plain {
   font: inherit;
   font-size: 17px; /* 16px 미만이면 iOS가 입력할 때 화면을 확대한다 */
   color: var(--text-h);
-  background: var(--bg);
+  background: var(--field);
   border: 1px solid var(--border);
   border-radius: 12px;
 }
@@ -134,7 +135,7 @@ button:disabled {
 
 .secondary {
   color: var(--text-h);
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--border);
 }
 

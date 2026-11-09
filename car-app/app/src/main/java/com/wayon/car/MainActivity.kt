@@ -12,23 +12,32 @@ import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.wayon.car.service.AppState
 import com.wayon.car.service.WayOnService
 import com.wayon.car.ui.HomeScreen
+import com.wayon.car.ui.QrScreen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
  * 화면 1개 (car-app-design.md 2장). 앱이 켜지면 WayOnService를 띄우고 붙어서 AppState를 그린다.
- * 화면은 상태를 읽기만 한다. 화면 6개 중 지금은 홈만 있다 (4장).
+ * 화면은 상태를 읽기만 하고, 버튼은 서비스 함수를 부른다. 화면 6개 중 지금은 홈·QR·휴게소 지도가 있다 (4장).
  */
 class MainActivity : ComponentActivity() {
 
@@ -39,7 +48,8 @@ class MainActivity : ComponentActivity() {
     // 서비스에 붙기 전에는 빈 상태를 보여 준다
     private val emptyState = MutableStateFlow(AppState())
     private val stateSource = mutableStateOf<StateFlow<AppState>>(emptyState)
-    private var service: WayOnService? = null
+    // 화면의 버튼이 부를 수 있게 상태로 둔다
+    private var service by mutableStateOf<WayOnService?>(null)
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -65,7 +75,19 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val state by stateSource.value.collectAsState()
-                    HomeScreen(state)
+                    Column {
+                        // 모든 화면 위 오프라인 띠 (4장, 7-2)
+                        if (!state.server.online) OfflineBar()
+                        if (state.server.qr != null && state.parked) {
+                            QrScreen(state, onBack = { service?.closeQr() }, onRenew = { service?.openQr() })
+                        } else {
+                            HomeScreen(
+                                state,
+                                onOpenQr = { service?.openQr() },
+                                onConsent = { service?.giveLocationConsent() },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -82,6 +104,19 @@ class MainActivity : ComponentActivity() {
         unbindService(connection)
         stateSource.value = emptyState
         super.onStop()
+    }
+
+    @Composable
+    private fun OfflineBar() {
+        Text(
+            "서버 연결 끊김 · 다시 연결하는 중",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.errorContainer)
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+        )
     }
 
     private fun askNotificationPermission() {
