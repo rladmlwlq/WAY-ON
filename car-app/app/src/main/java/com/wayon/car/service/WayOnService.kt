@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import com.wayon.car.BuildConfig
 import com.wayon.car.car.CarSignals
 import com.wayon.car.car.NaviBridge
+import com.wayon.car.car.UxRestrictions
 import com.wayon.car.server.RestAreaApi
 import com.wayon.car.voice.Voice
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +35,7 @@ class WayOnService : LifecycleService() {
     lateinit var carSignals: CarSignals
         private set
     private lateinit var navi: NaviBridge
+    private lateinit var uxRestrictions: UxRestrictions
     private lateinit var voice: Voice
     private lateinit var myWaypoints: MyWaypoints
     private lateinit var restAreaGuide: RestAreaGuide
@@ -62,6 +64,7 @@ class WayOnService : LifecycleService() {
         startAsForeground()
         carSignals = CarSignals(applicationContext).also { it.start() }
         navi = NaviBridge(applicationContext).also { it.start() }
+        uxRestrictions = UxRestrictions(applicationContext).also { it.start() }
         voice = Voice(applicationContext).also { it.start() }
         myWaypoints = MyWaypoints(applicationContext)
         restAreaNotifier = RestAreaNotifier(applicationContext)
@@ -84,10 +87,14 @@ class WayOnService : LifecycleService() {
         lifecycleScope.launch { navi.events.collect(guide::onNavi) }
         lifecycleScope.launch { carSignals.gear.collect(guide::onGear) }
 
-        // 도착 알림 (A+B): 앱이 보이면 카드로 충분하고, 안 보이면 알림. 한 번 본 도착은 다시 알리지 않는다
+        // 정차 = 기어 P이고 주행 규제 없음. 화면(AppState.parked)과 같은 기준
+        val parked = combine(carSignals.gear, uxRestrictions.restricted, UxRestrictions::isParked)
+
+        // 도착 알림 (A+B): 앱이 보이면 카드로 충분하고, 안 보이면 알림. 한 번 본 도착은 다시 알리지 않는다.
+        // 도착은 내비 도착 콜백으로 달리는 중에도 생기므로, 알림은 정차했을 때만 띄운다 (주행 중 heads-up 금지)
         lifecycleScope.launch {
             var seen: String? = null
-            combine(guide.ui, uiVisible) { ui, visible -> ui.arrived to visible }.collect { (card, visible) ->
+            combine(guide.ui, uiVisible, parked) { ui, visible, p -> Triple(ui.arrived, visible, p) }.collect { (card, visible, isParked) ->
                 when {
                     card == null -> {
                         seen = null
@@ -97,6 +104,7 @@ class WayOnService : LifecycleService() {
                         seen = card.name
                         restAreaNotifier.cancel()
                     }
+                    !isParked -> Unit
                     // 정보를 받은 뒤(또는 실패한 뒤, 최대 연결 대기 5초) 한 번 띄운다.
                     // 바로 띄우면 heads-up에 "불러오는 중"만 보이고, 내용이 바뀌어도 다시 내려오지 않는다
                     card.map == null && !card.loadFailed -> Unit
@@ -111,8 +119,9 @@ class WayOnService : LifecycleService() {
                 navi.drive,
                 myWaypoints.list,
                 guide.ui,
-            ) { (gear, energy, location), drive, waypoints, restArea ->
-                AppState(gear, energy, location, drive, waypoints, restArea)
+                uxRestrictions.restricted,
+            ) { (gear, energy, location), drive, waypoints, restArea, ux ->
+                AppState(gear, energy, location, drive, waypoints, restArea, ux)
             }.collect { _state.value = it }
         }
     }
@@ -139,6 +148,7 @@ class WayOnService : LifecycleService() {
 
     override fun onDestroy() {
         voice.stop()
+        uxRestrictions.stop()
         navi.stop()
         carSignals.stop()
         super.onDestroy()

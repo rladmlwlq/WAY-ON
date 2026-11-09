@@ -9,6 +9,8 @@ plugins {
 android {
     namespace = "com.wayon.car"
     compileSdk = 35
+    // 주행 규제 CarUxRestrictionsManager (Pleos 주행 규제 개발 가이드). 차 시스템에 있는 라이브러리라 APK에 넣지 않음
+    useLibrary("android.car")
 
     defaultConfig {
         applicationId = "com.wayon.car"
@@ -64,7 +66,6 @@ android {
 dependencies {
     implementation(libs.pleos.vehicle)
     implementation(libs.pleos.navihelper)
-    implementation(libs.pleos.fusedlocation)
     implementation(libs.pleos.tts)
 
     implementation(libs.retrofit)

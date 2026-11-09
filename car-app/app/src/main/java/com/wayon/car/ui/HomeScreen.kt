@@ -25,7 +25,7 @@ import com.wayon.car.service.ArrivedCard
 @Composable
 fun HomeScreen(state: AppState, modifier: Modifier = Modifier) {
     val arrived = state.restArea.arrived
-    // 도착은 기어 P일 때만 생기고 D가 되면 지워진다. 그래도 주행 중에는 보이지 않게 한 번 더 막는다
+    // 도착은 내비 도착 콜백으로 달리는 중에도 생길 수 있다. 정차(기어 P, 주행 규제 없음)일 때만 지도를 연다
     val map = arrived?.map
     if (state.parked && map != null) {
         Column(modifier.fillMaxSize()) {

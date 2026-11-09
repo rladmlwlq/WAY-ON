@@ -51,6 +51,19 @@
   window.onerror = function (msg, src, line) { console.log("JS 오류: " + msg + " @" + src + ":" + line); };
   var ICON = { FOOD: '🍽️', CAFE: '☕', STORE: '🏪', GAS: '⛽', EV: '🔌', TOILET: '🚻', ATM: '🏧' };
   var map, clusterer, carOverlay, pins = {};
+  var fitBounds, buildingPos, hasPlaces = false, userMoved = false;
+
+  // 휴게소 건물과 매장이 다 보이게 맞춘다. 아이콘(지름 약 90px)과 이름표가 가장자리에서 잘리지 않게 여백을 넉넉히.
+  // 너무 멀리 빠지지 않게 레벨 3까지만 넓히고, 그래서 다 안 들어가면(좁은 창) 휴게소 건물을 가운데에 둔다
+  function fit() {
+    if (!map || !fitBounds) return;
+    if (hasPlaces) map.setBounds(fitBounds, 110, 80, 110, 80);
+    else map.setCenter(buildingPos);
+    if (map.getLevel() > 3) {
+      map.setLevel(3);
+      map.setCenter(buildingPos);
+    }
+  }
 
   function load(key) {
     var s = document.createElement('script');
@@ -118,9 +131,12 @@
       });
       clusterer.addMarkers(overlays);
 
-      // 휴게소에 맞춰 크게 (너무 멀리 빠지지 않게 레벨 3까지)
-      if (overlays.length) map.setBounds(bounds, 60, 60, 60, 60);
-      if (map.getLevel() > 3) map.setLevel(3);
+      fitBounds = bounds;
+      buildingPos = center;
+      hasPlaces = overlays.length > 0;
+      // 사용자가 지도를 끌어 옮기면 창 크기가 바뀌어도 그 자리를 둔다
+      kakao.maps.event.addListener(map, 'dragstart', function () { userMoved = true; });
+      fit();
     } catch (e) {
       Android.onError('show: ' + e.message);
     }
@@ -143,12 +159,23 @@
     focusOverlay.setPosition(pos);
     focusOverlay.setMap(map);
     select(id);
+    userMoved = true; // 고른 가게를 보는 중이면 창 크기가 바뀌어도 다시 맞추지 않는다
     if (map.getLevel() > 2) map.setLevel(2);
     map.panTo(pos);
   }
 
-  // 화면 크기가 바뀌면(보조 창 비율 변경 등) 지도를 다시 맞춘다
-  window.addEventListener("resize", function () { if (map) map.relayout(); });
+  // 지도 칸 크기가 바뀌면(혼자 ↔ 내비와 반반, 처음 칸이 잡힐 때) 지도 크기를 다시 잡고,
+  // 사용자가 옮기지 않았으면 범위도 다시 맞춘다. window resize는 웹뷰에서 오지 않을 때가 있어 칸 자체를 본다.
+  // 크기 바뀜이 여러 번 연달아 오므로 멈춘 뒤 한 번만
+  var resizeTimer;
+  new ResizeObserver(function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (!map) return;
+      map.relayout();
+      if (!userMoved) fit();
+    }, 200);
+  }).observe(document.getElementById('map'));
 
   function setCar(lat, lng) {
     if (!map) return;

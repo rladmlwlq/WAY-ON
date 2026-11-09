@@ -443,7 +443,7 @@ stateDiagram-v2
 ### 6-1. 처음 실행
 
 1. `carToken`이 없으면 `POST /api/vehicles` → 받은 토큰을 저장.
-2. 차량 쪽 위치 공유 동의를 한 번 받습니다 (앱 화면의 [동의] 버튼). 이어서 FusedLocation 권한과 알림 권한을 묻습니다.
+2. 차량 쪽 위치 공유 동의를 한 번 받습니다 (앱 화면의 [동의] 버튼). 이어서 알림 권한을 묻습니다 (위치는 NaviHelper로 받아 FusedLocation 권한은 쓰지 않음).
 3. 서비스를 시작하고 홈으로.
 
 거부했을 때는 7-3.
@@ -462,7 +462,7 @@ sequenceDiagram
     end
     A->>D: 위치 공유 동의 화면 (처음 한 번)
     D-->>A: [동의]
-    A->>D: FusedLocation 권한, 알림 권한 (시스템 창)
+    A->>D: 알림 권한 (시스템 창)
     A->>A: WayOnService 시작 → 6-2
 ```
 
@@ -757,7 +757,6 @@ stateDiagram-v2
 | 거부한 것 | 영향 | 차 화면 |
 |---|---|---|
 | 차량 쪽 위치 공유 동의 | 세션을 열 수 없음 (`trip.start`에 동의가 필요) | 홈에 "위치 공유에 동의해야 동승자와 연결돼요" + [동의하기]. 동승자 연결·출발해요 버튼 숨김 |
-| FusedLocation 권한 | 위치는 NaviHelper(`getCurrentLocationInfo`)로 읽으므로 기능은 그대로 | 알리지 않음 |
 | 위치를 둘 다 못 읽음 | 경로 위 장소, 휴게소 접근 판단이 안 됨 | 홈에 "차 위치를 읽을 수 없어요" |
 | 알림 권한 | 포그라운드 서비스는 돌지만 상단 알림이 안 보이고, 내비가 앞에 있을 때 heads-up으로 앱을 불러올 수 없음 | 설정 화면에 "알림을 켜면 내비 화면에서도 요청을 볼 수 있어요" + [설정 열기]. 홈에는 띄우지 않음 |
 
@@ -820,11 +819,12 @@ app-api.md 8장 중 차량 앱이 받을 수 있는 것만 적었습니다. 문�
 | 기어 | Vehicle `Gear.registerGearSelection()` | `pleos.car.permission.CAR_DRIVE` |
 | 주행 가능 거리 | Vehicle `Odometer.registerRangeRemainingListener()` (안 나오면 `CarPropertyManager` `RANGE_REMAINING`) | `CAR_DRIVE` |
 | 연료·배터리 % | Vehicle `Fuel.registerFuelPercent()`, `EvBattery.registerEvBatteryStateOfCharge()` | `pleos.car.permission.CAR_ENERGY` |
-| 위치 | NaviHelper `getCurrentLocationInfo()`, FusedLocation | `NAVI_ROUTE`, `FUSED_LOCATION` (런타임) |
+| 위치 | NaviHelper `getCurrentLocationInfo()` (FusedLocation은 에뮬레이터에서 미국 좌표라 빼고 권한도 없앰, 2026-11-09) | `NAVI_ROUTE` |
 | 목적지·경유지 남은 거리 | NaviHelper `onDrivingInfo` | `NAVI_ROUTE` |
 | 경유지·목적지 바꾸기 | NaviHelper `addWaypoint(RequestWaypointInfo)`, `requestRoute(RouteInfo)`, `onRoutingCompleted`, `onError(NaviErrorCode)` | **`NAVI_ROUTE_SEARCH`** (normal) |
 | 경유지 좌표·도착 | NaviHelper `getWaypointInfo()` → `onWayPointInfo` (좌표 있음), `onWaypointChanged`, `onWayPointArrived` | `NAVI_ROUTE` |
-| 음성 | TextToSpeech `Mode.ON_DEVICE` | `pleos.car.permission.TTS_SERVICE` |
+| 음성 | TextToSpeech `Mode.ON_DEVICE`, `setAudioAttributes(내비 안내)` | `pleos.car.permission.TTS_SERVICE` |
+| 주행 규제 | `CarUxRestrictionsManager` (`android.car`, `useLibrary`) | — |
 | QR | ZXing core (추가) | — |
 | 통신 | Retrofit 2.11 + Gson, OkHttp 4.12 WebSocket | `INTERNET` |
 | 서비스 | 포그라운드 서비스 (`specialUse`) | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, `POST_NOTIFICATIONS` |
@@ -866,8 +866,11 @@ app-api.md 8장 중 차량 앱이 받을 수 있는 것만 적었습니다. 문�
 | 결과 콜백 | 경로 요청 결과는 `onRouteStarted`, `onRoutingCompleted`, `onError`로 확인. 단 **"전달되는 이벤트는 내비 앱 구현에 따라 다를 수 있음"** | 에뮬레이터에서 `onRoutingCompleted`가 안 온 것과 맞음. 성공을 여러 콜백 중 하나로 판단하고 60초 시한을 둔 설계가 맞음 |
 | 초기화 순서 | NaviHelper: `initialize(onConnected, onFailed)` 뒤에 리스너 등록. TTS: 생성 → `initialize()` → `addEventListener()` → `setLocale()` → `speak()` | 맞음 (TTS 순서는 에뮬레이터에서 앱이 죽어 알게 된 것과 같음) |
 | TTS 모드 | `ON_DEVICE`는 네트워크·앱 등록이 필요 없음. 기본값 `HYBRID`는 앱 등록 필요 | `ON_DEVICE` 사용, 맞음 |
-| 운전 중 제한 | QR sign-in은 모든 지역에서 주행 중 금지. 키보드는 "기타 지역(한국)" 주행 중 허용, 정차 중 모든 지역 허용. 주행 상태는 `CarUxRestrictionsManager`로 받음 | 주행 중 QR 숨김 맞음. 텍스트 입력은 더 엄격하게 P에서만 |
+| 운전 중 제한 | QR sign-in은 모든 지역에서 주행 중 금지. 키보드는 "기타 지역(한국)" 주행 중 허용, 정차 중 모든 지역 허용. 주행 상태는 `CarUxRestrictionsManager`로 받음 | 주행 중 QR 숨김 맞음. 텍스트 입력은 더 엄격하게 P에서만. **정차 = 기어 P이고 `isRequiresDistractionOptimization()`이 false** (`UxRestrictions.isParked`, 11/9). 규제 값을 못 받으면 기어만 봄 (플랫폼보다 엄격). 휴게소 지도·도착 heads-up 알림도 이 기준 |
 | DO 선언 | Pleos 문서에는 매니페스트 이름이 없음. Android Automotive 문서의 `<meta-data android:name="distractionOptimized" android:value="true"/>` | 그대로 사용 |
+| 오디오 포커스 (11/9) | 안내 음성은 `USAGE_ASSISTANCE_NAVIGATION_GUIDANCE` + `GAIN_TRANSIENT_MAY_DUCK`. 포커스 변경 이벤트 처리 필수, 거절(통화·긴급)은 정상 처리 | TTS SDK 기본 소리 종류가 `USAGE_MEDIA`라 `setAudioAttributes`로 내비 안내를 넘김. 거절되면 건너뜀, 잃으면 멈춤, 끝 콜백이 15초 안 오면 포커스 놓음 |
+| 음성 앞 묵음 (11/9) | 150~200ms, 음성 데이터 앞 무음이 1순위, 재생 지연은 권장 안 함 | 200ms. SDK가 문장만 받아(`speak(text)`) 재생 지연만 가능 |
+| 브라우저 기능 (11/9) | 심사 가이드: 운전 중 동영상·게임·브라우저 금지 | 휴게소 지도 웹뷰는 페이지 이동을 모두 막음 (`shouldOverrideUrlLoading` → true) |
 | 보안 가이드 | 토큰을 URL에 넣지 않음, HTTPS, Keystore로 키 보관, 민감 정보 로그 금지, 필요 없는 컴포넌트·권한 노출 금지, 릴리스 서명·디버그 끄기 | 대부분 반영됨. 릴리스 전 할 일은 14장 |
 
 아직 못 본 것: 내비 미리보기에서 운전자가 [X]로 취소했을 때 기존 안내가 어떻게 되는지 (내비 화면이 앞에 안 뜰 때가 있어 누르지 못함), 기어 D에서의 동작 (Virtual Console 조작 필요), TTS 소리.
@@ -942,6 +945,6 @@ app-api.md를 따르되, 앱 결정 때문에 규격에 더할 것이 있습니�
 - [ ] **DO 선언 이름 확인**: Android Automotive 표준 `distractionOptimized`를 씀. Pleos도 같은지 문서로 확인하고, 에뮬레이터에서 주행 중 수락 화면이 막히지 않는지 봄
 - [ ] **릴리스 서명**: 서명 키 만들기, `signingConfigs` 설정. 키 파일과 비밀번호는 저장소에 넣지 않음
 - [ ] **APK 이름**: 릴리스 출력 이름을 `WayOn_WayOn_release.apk`로 (신청서 팀명 확인 후). 제출 위치는 `apk/`
-- [ ] **FusedLocation 빼기**: 에뮬레이터에서 미국 좌표만 주고 위치는 NaviHelper로 받으므로, SDK 의존성과 `FUSED_LOCATION` 권한을 뺌 (보안 가이드 "필요 없는 권한 금지")
+- [x] **FusedLocation 빼기** (11/9): 에뮬레이터에서 미국 좌표만 주고 위치는 NaviHelper로 받으므로, SDK 의존성과 `FUSED_LOCATION` 권한을 뺌 (보안 가이드 "필요 없는 권한 금지")
 - [ ] **릴리스 로그 끄기**: 위치·토큰이 들어가는 로그는 릴리스에서 안 나오게 (보안 가이드 "민감 정보 로그 금지")
 - [ ] **릴리스 난독화**: 지금 `isMinifyEnabled = false`. 켤 경우 Gson 모델·Pleos SDK가 깨지지 않게 `proguard-rules.pro`에 규칙 추가. 시간이 없으면 끈 채로 제출

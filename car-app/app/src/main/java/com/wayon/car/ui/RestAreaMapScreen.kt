@@ -144,6 +144,13 @@ private fun KakaoMap(
                     }
                 }
                 webViewClient = object : android.webkit.WebViewClient() {
+                    // 지도 페이지 밖으로는 못 나가게 한다 (지도 안 카카오 로고·링크 등). 차 화면이 브라우저가 되면
+                    // 안 됨 (Pleos 심사 가이드: 운전 중 브라우저 기능 금지). 지도 스크립트·타일 받기는 이동이 아니라 그대로 됨
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView,
+                        request: android.webkit.WebResourceRequest,
+                    ): Boolean = true
+
                     override fun onPageFinished(view: WebView, url: String?) {
                         view.evaluateJavascript("load(${JSONObject.quote(BuildConfig.KAKAO_JS_KEY)})", null)
                     }
