@@ -7,9 +7,11 @@ import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.Path
 import java.util.concurrent.TimeUnit
 
 /** 2-1 */
@@ -25,8 +27,8 @@ data class ConnectCode(val code: String, val url: String, val expiresAt: String)
 data class Passengers(val passengers: List<Passenger> = emptyList())
 
 /**
- * 차량 앱 REST (app-api.md 2장). 지금은 등록, QR 발급, 동승자 목록만.
- * 해제·지난 대화 등은 그 화면을 붙일 때 더한다. 휴게소 지도는 아직 [RestAreaApi].
+ * 차량 앱 REST (app-api.md 2장). 지금은 등록, QR 발급, 동승자 목록·해제만.
+ * 지난 대화 등은 그 화면을 붙일 때 더한다. 휴게소 지도는 아직 [RestAreaApi].
  */
 interface WayOnApi {
 
@@ -42,6 +44,13 @@ interface WayOnApi {
     /** passengers.update는 바뀔 때만 오므로, 접속(auth.ok)할 때 한 번 받는다 */
     @GET("api/vehicles/me/passengers")
     suspend fun passengers(@Header("Authorization") authorization: String): Passengers
+
+    /** 2-4. 해제된 폰은 서버가 4403으로 끊는다 */
+    @DELETE("api/vehicles/me/passengers/{passengerId}")
+    suspend fun deletePassenger(
+        @Header("Authorization") authorization: String,
+        @Path("passengerId") passengerId: Long,
+    )
 
     companion object {
         fun create(baseUrl: String = Config.SERVER_URL): WayOnApi {

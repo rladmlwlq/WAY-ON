@@ -1,20 +1,35 @@
 package com.wayon.car.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.wayon.car.service.AppState
 import com.wayon.car.service.ArrivedCard
 
@@ -29,6 +44,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onOpenQr: () -> Unit = {},
     onConsent: () -> Unit = {},
+    onManage: () -> Unit = {},
 ) {
     val arrived = state.restArea.arrived
     // 도착은 내비 도착 콜백으로 달리는 중에도 생길 수 있다. 정차(기어 P, 주행 규제 없음)일 때만 지도를 연다
@@ -48,48 +64,80 @@ fun HomeScreen(
         return
     }
 
+    // QR 화면과 같은 배경·색·가운데 정렬. 크기는 CarUi.kt. 길면 말줄임 대신 글자가 줄어든다 (FitText)
     Column(
-        modifier = modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(BgTop, BgBottom)))
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 48.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
         val server = state.server
-        Text("WAY:ON", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-
-        Text(passengersLine(state), style = MaterialTheme.typography.titleLarge)
-
-        Text(destinationLine(state), style = MaterialTheme.typography.titleLarge)
+        Text("WAY:ON", fontSize = 56.sp, fontWeight = FontWeight.ExtraBold, color = Navy, letterSpacing = 2.sp)
+        Spacer(Modifier.height(40.dp))
+        // 목적지 이름이 길면 두 줄까지, 그래도 넘치면 글자를 줄인다
+        FitText(destinationLine(state), 64.sp, color = Navy, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2)
+        Spacer(Modifier.height(16.dp))
+        FitText(passengersLine(state), 32.sp, color = Gray, textAlign = TextAlign.Center)
 
         state.restArea.approaching?.let {
-            Text("곧 $it", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(32.dp))
+            FitText("곧 $it", 52.sp, color = Blue, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         }
 
-        server.notice?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
+        server.notice?.let {
+            Spacer(Modifier.height(24.dp))
+            Text(it, fontSize = 32.sp, lineHeight = 42.sp, color = Navy, textAlign = TextAlign.Center)
+        }
 
         // 지도 정보를 받기 전이거나 못 받았을 때
-        if (state.parked && arrived != null) LoadingCard(arrived)
+        if (state.parked && arrived != null) {
+            Spacer(Modifier.height(48.dp))
+            LoadingCard(arrived)
+        }
 
         // 버튼은 정차 중에만 (4-1). 동의 전에는 세션을 열 수 없어 동의부터 (7-3)
         if (state.parked) {
+            Spacer(Modifier.height(56.dp))
             if (!server.locationConsent) {
                 ConsentCard(onConsent)
             } else {
-                Button(onClick = onOpenQr) { Text("동승자 연결", style = MaterialTheme.typography.titleLarge) }
+                // 관리 왼쪽, 연결(주 버튼) 오른쪽
+                Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = onManage, modifier = PrimaryButton, contentPadding = ButtonPadding) {
+                        ButtonText("동승자 관리", PrimaryButtonFont)
+                    }
+                    Button(onClick = onOpenQr, modifier = PrimaryButton, contentPadding = ButtonPadding) {
+                        ButtonText("동승자 연결", PrimaryButtonFont)
+                    }
+                }
             }
         }
     }
 }
 
+/** QR 화면 카드와 같은 흰 카드 */
+private val WhiteCard = Modifier
+    .widthIn(max = 1000.dp)
+    .shadow(8.dp, RoundedCornerShape(32.dp), ambientColor = Blue, spotColor = Blue)
+    .background(Color.White, RoundedCornerShape(32.dp))
+    .padding(48.dp)
+
 @Composable
 private fun ConsentCard(onConsent: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("위치 공유에 동의해야 동승자와 연결돼요", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(
-                "연결된 동승자 폰에 이 차의 현재 위치와 경로가 보여요. 위치 기록은 남기지 않아요.",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Button(onClick = onConsent) { Text("동의하기", style = MaterialTheme.typography.titleMedium) }
-        }
+    Column(WhiteCard, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        FitText("위치 공유에 동의해야 동승자와 연결돼요", 44.sp, color = Navy, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2)
+        FitText(
+            "연결된 동승자 폰에 이 차의 현재 위치와 경로가 보여요.\n위치 기록은 남기지 않아요.",
+            32.sp,
+            color = Gray,
+            textAlign = TextAlign.Center,
+            maxLines = 3,
+        )
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = onConsent, modifier = HomeButton, contentPadding = ButtonPadding) { ButtonText("동의하기", HomeButtonFont) }
     }
 }
 
@@ -106,14 +154,13 @@ private fun passengersLine(state: AppState): String {
 
 @Composable
 private fun LoadingCard(card: ArrivedCard) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(card.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(
-                if (card.loadFailed) "휴게소 정보를 불러오지 못했어요" else "휴게소 지도를 불러오는 중…",
-                style = MaterialTheme.typography.titleMedium,
-            )
-        }
+    Column(WhiteCard, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        FitText(card.name, 48.sp, color = Navy, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(
+            if (card.loadFailed) "휴게소 정보를 불러오지 못했어요" else "휴게소 지도를 불러오는 중…",
+            fontSize = 32.sp,
+            color = Gray,
+        )
     }
 }
 

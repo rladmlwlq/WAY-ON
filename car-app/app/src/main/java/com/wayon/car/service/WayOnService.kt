@@ -241,6 +241,16 @@ class WayOnService : LifecycleService() {
         }
     }
 
+    /** 설정 [해제] (6-10). 서버가 passengers.update도 보내지만 바로 빼서 화면이 기다리지 않게 */
+    fun removePassenger(passengerId: Long) {
+        val token = carToken ?: return
+        lifecycleScope.launch {
+            runCatching { api.deletePassenger(WayOnApi.bearer(token), passengerId) }
+                .onSuccess { serverUi.update { s -> s.copy(passengers = s.passengers.filter { it.passengerId != passengerId }) } }
+                .onFailure { e -> serverUi.update { it.copy(notice = "해제하지 못했어요. ${e.toApiError().message}") } }
+        }
+    }
+
     private fun loadPassengers() {
         val token = carToken ?: return
         lifecycleScope.launch {
