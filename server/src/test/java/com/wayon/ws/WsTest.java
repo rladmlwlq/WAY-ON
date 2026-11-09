@@ -25,6 +25,7 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import com.wayon.departure.DepartureService;
 import com.wayon.trip.TripService;
 import com.wayon.vehicle.VehicleDto;
 import com.wayon.vehicle.VehicleService;
@@ -43,6 +44,9 @@ class WsTest {
 
 	@Autowired
 	private TripService trips;
+
+	@Autowired
+	private DepartureService departures;
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -79,6 +83,17 @@ class WsTest {
 			assertNotNull(m, "no message, wanted " + type);
 			assertEquals(type, m.get("type"), m.toString());
 			return (Map<?, ?>) m.get("data");
+		}
+
+		/** type이 올 때까지 다른 메시지(passengers.update 등)는 건너뛴다 */
+		Map<?, ?> until(String type) throws Exception {
+			while (true) {
+				Map<?, ?> m = received.poll(5, TimeUnit.SECONDS);
+				assertNotNull(m, "no message, wanted " + type);
+				if (type.equals(m.get("type"))) {
+					return (Map<?, ?>) m.get("data");
+				}
+			}
 		}
 
 		int closeCode() throws Exception {
@@ -120,6 +135,9 @@ class WsTest {
 		}
 		for (long id : vehicleIds) {
 			jdbc.update("DELETE FROM waypoint_request WHERE trip_id IN (SELECT id FROM trip WHERE vehicle_id = ?)", id);
+			jdbc.update("DELETE FROM departure_message WHERE call_id IN (SELECT id FROM departure_call WHERE vehicle_id = ?)",
+					id);
+			jdbc.update("DELETE FROM departure_call WHERE vehicle_id = ?", id);
 			jdbc.update("DELETE FROM trip_passenger WHERE trip_id IN (SELECT id FROM trip WHERE vehicle_id = ?)", id);
 			jdbc.update("DELETE FROM trip WHERE vehicle_id = ?", id);
 			jdbc.update("DELETE FROM passenger WHERE vehicle_id = ?", id);
@@ -277,5 +295,103 @@ class WsTest {
 		assertEquals("PLACE_NOT_FOUND", carWs.next("error").get("code"));
 		carWs.send("{\"type\":\"restarea.approach\",\"reqId\":\"2\",\"data\":{}}");
 		assertEquals("BAD_REQUEST", carWs.next("error").get("code"));
+	}
+
+	private String lastCar;
+
+	/** 세션을 연 차와 붙어 있는 동승자 1명 (민지) */
+	private Client[] carWithPassenger() throws Exception {
+		String car = newCar();
+		lastCar = car;
+		Client carWs = auth(car);
+		carWs.next("auth.ok");
+		carWs.send("{\"type\":\"trip.start\",\"reqId\":\"t\",\"data\":{\"locationConsent\":true}}");
+		carWs.next("ack");
+		Client phone = auth(newPassenger(car, "민지").passengerToken());
+		phone.next("auth.ok");
+		carWs.until("passengers.update");
+		return new Client[] { carWs, phone };
+	}
+
+	@Test
+	void 출발해요_알림_답장_대화_출발() throws Exception {
+		Client[] c = carWithPassenger();
+		Client carWs = c[0];
+		Client phone = c[1];
+
+		carWs.send("{\"type\":\"departure.call\",\"reqId\":\"d\",\"data\":{\"destName\":\"부산역\",\"etaS\":5400}}");
+		// 차는 ack {callId…}를 먼저 받고 상태 줄(departure.status)
+		Map<?, ?> ack = carWs.next("ack");
+		long callId = ((Number) ack.get("callId")).longValue();
+		assertEquals("부산역", ack.get("destName"));
+		assertEquals(5400, ((Number) ack.get("etaS")).intValue());
+		Map<?, ?> person = (Map<?, ?>) ((List<?>) carWs.next("departure.status").get("people")).get(0);
+		assertEquals("민지", person.get("nickname"));
+		assertNull(person.get("lastQuickCode"));
+		Map<?, ?> called = phone.next("departure.called");
+		assertEquals(callId, ((Number) called.get("callId")).longValue());
+		phone.next("departure.status");
+
+		// 이미 열려 있으면 다시 못 연다
+		carWs.send("{\"type\":\"departure.call\",\"reqId\":\"d2\",\"data\":{}}");
+		assertEquals("CALL_ALREADY_OPEN", carWs.next("error").get("code"));
+
+		// 동승자 빠른 답장 → 차·폰에 메시지와 상태
+		phone.send("{\"type\":\"departure.message\",\"reqId\":\"m1\",\"data\":{\"callId\":" + callId
+				+ ",\"kind\":\"QUICK\",\"quickCode\":\"TOILET\"}}");
+		Map<?, ?> message = carWs.next("departure.message");
+		assertEquals("TOILET", message.get("quickCode"));
+		assertEquals("민지", ((Map<?, ?>) message.get("sender")).get("nickname"));
+		person = (Map<?, ?>) ((List<?>) carWs.next("departure.status").get("people")).get(0);
+		assertEquals("TOILET", person.get("lastQuickCode"));
+		phone.until("ack");
+
+		// 1초 안에 또 보내면 막는다, 운전자 코드는 동승자가 못 쓴다
+		phone.send("{\"type\":\"departure.message\",\"reqId\":\"m2\",\"data\":{\"callId\":" + callId
+				+ ",\"kind\":\"TEXT\",\"body\":\"5분만요\"}}");
+		assertEquals("MESSAGE_TOO_FAST", phone.until("error").get("code"));
+		Thread.sleep(1100);
+		phone.send("{\"type\":\"departure.message\",\"reqId\":\"m3\",\"data\":{\"callId\":" + callId
+				+ ",\"kind\":\"QUICK\",\"quickCode\":\"HURRY\"}}");
+		assertEquals("MESSAGE_INVALID", phone.until("error").get("code"));
+
+		// 운전자 텍스트 → 폰에 "운전자"
+		carWs.send("{\"type\":\"departure.message\",\"reqId\":\"m4\",\"data\":{\"callId\":" + callId
+				+ ",\"kind\":\"TEXT\",\"body\":\" B동 앞이에요 \"}}");
+		message = phone.until("departure.message");
+		assertEquals("B동 앞이에요", message.get("body"));
+		assertEquals("운전자", ((Map<?, ?>) message.get("sender")).get("nickname"));
+		carWs.until("ack");
+
+		// 다시 알리기는 1분 뒤부터
+		carWs.send("{\"type\":\"departure.remind\",\"reqId\":\"r\",\"data\":{\"callId\":" + callId + "}}");
+		assertEquals("REMIND_TOO_SOON", carWs.until("error").get("code"));
+
+		// 다시 접속하면 auth.ok에 열린 알림
+		Map<?, ?> open = (Map<?, ?>) auth(newPassenger(lastCar, "준호").passengerToken()).next("auth.ok")
+				.get("openCall");
+		assertEquals(callId, ((Number) open.get("callId")).longValue());
+
+		// 출발 → 닫힘, 그 뒤 메시지는 CALL_CLOSED
+		carWs.send("{\"type\":\"departure.close\",\"reqId\":\"x\",\"data\":{\"callId\":" + callId
+				+ ",\"reason\":\"DEPARTED\"}}");
+		assertEquals("DEPARTED", phone.until("departure.closed").get("reason"));
+		assertEquals("DEPARTED", carWs.until("departure.closed").get("reason"));
+		phone.send("{\"type\":\"departure.message\",\"reqId\":\"m5\",\"data\":{\"callId\":" + callId
+				+ ",\"kind\":\"QUICK\",\"quickCode\":\"COMING\"}}");
+		assertEquals("CALL_CLOSED", phone.until("error").get("code"));
+		assertNull(departures.select_openCall(vehicleIds.get(0)));
+	}
+
+	@Test
+	void 출발_알림은_30분이_지나면_닫히고_차와_폰에_알린다() throws Exception {
+		Client[] c = carWithPassenger();
+		c[0].send("{\"type\":\"departure.call\",\"reqId\":\"d\",\"data\":{}}");
+		c[0].until("ack");
+		jdbc.update("UPDATE departure_call SET called_at = called_at - INTERVAL 31 MINUTE WHERE vehicle_id = ?",
+				vehicleIds.get(0));
+		departures.save_expiredCalls();
+		assertEquals("EXPIRED", c[0].until("departure.closed").get("reason"));
+		assertEquals("EXPIRED", c[1].until("departure.closed").get("reason"));
 	}
 }

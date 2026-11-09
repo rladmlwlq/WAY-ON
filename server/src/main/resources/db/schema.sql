@@ -243,6 +243,7 @@ CREATE TABLE departure_call (
   trip_id           BIGINT      NOT NULL COMMENT '세션 ID',          -- 누른 시점의 세션 (만료돼도 기록용으로 남김)
   status            VARCHAR(10) NOT NULL COMMENT '상태',             -- OPEN / DEPARTED / CANCELLED / EXPIRED
   eta_min           SMALLINT    COMMENT '목적지까지 남은 시간(분)',   -- 알림 문구용
+  dest_name         VARCHAR(100) COMMENT '목적지 이름',               -- 알림 문구용. 차량 앱이 departure.call에 담아 보냄
   called_at         DATETIME(3) NOT NULL COMMENT '[출발해요] 누른 시각',
   last_reminded_at  DATETIME(3) COMMENT '마지막 다시 알리기 시각',     -- 1분에 1번까지
   closed_at         DATETIME(3) COMMENT '종료 시각',

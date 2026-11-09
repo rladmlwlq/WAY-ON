@@ -179,9 +179,9 @@ server/src/main/resources/
 
 | 항목 | 내용 |
 |---|---|
-| WebSocket | `/ws` 적용 완료 (`com.wayon.ws`). 인증·ping·`trip.start`/`trip.end`·5분 만료·`passengers.update`, 휴게소 `restarea.*` → 폰 `restarea.info`까지. 위치·경로·경유지·에너지·주차장·출발해요 메시지는 아직 |
+| WebSocket | `/ws` 적용 완료 (`com.wayon.ws`). 인증·ping·`trip.start`/`trip.end`·5분 만료·`passengers.update`, 휴게소 `restarea.*` → 폰 `restarea.info`, 출발해요 `departure.*`(30분 만료, 30일 지난 대화 하루 1번 삭제)까지. 위치·경로·경유지·에너지·주차장 메시지는 아직 |
 | 허용 Origin | CORS와 WebSocket 모두 `http://localhost:5173`과 `WEB_URL`(Vercel 운영 주소, `server/.env`) 적용 완료. Origin 헤더가 없는 차량 앱은 그대로 통과 |
-| 웹 푸시 키 | VAPID 키 쌍을 만들어 `server/.env`에 보관. 공개 키(`VAPID_PUBLIC_KEY`)는 서버 API(`GET /api/push/vapid-public-key`)로 웹에 전달. 없으면 503 |
+| 웹 푸시 키 | `server/.env`에 `VAPID_PUBLIC_KEY`·`VAPID_PRIVATE_KEY` (선택 `VAPID_SUBJECT`, 배포 때 `mailto:` 또는 https 주소). 키 쌍은 `com.wayon.push.WebPushSender`의 main으로 만듦. 공개 키는 `GET /api/push/vapid-public-key`로 웹에 전달, 없으면 503이고 푸시는 건너뜀 (WebSocket으로는 받음). 팀이 같은 서버를 쓰면 같은 키 쌍을 공유. 발송은 라이브러리 없이 JDK로 (RFC 8291 암호화, RFC 8292 VAPID) |
 | 배포 | HTTPS 도메인 필요. 배포처는 미정 |
 
 ---

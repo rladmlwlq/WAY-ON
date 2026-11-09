@@ -174,6 +174,7 @@ erDiagram
         BIGINT trip_id FK
         VARCHAR(10) status "OPEN, DEPARTED, CANCELLED, EXPIRED"
         SMALLINT eta_min "NULL 가능"
+        VARCHAR(100) dest_name "NULL 가능, 알림 문구용"
         DATETIME(3) called_at
         DATETIME(3) last_reminded_at "NULL 가능"
         DATETIME(3) closed_at "NULL 가능"

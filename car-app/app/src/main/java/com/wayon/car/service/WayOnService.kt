@@ -12,9 +12,14 @@ import android.util.Log
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.wayon.car.BuildConfig
+import com.wayon.car.Config
 import com.wayon.car.car.CarSignals
+import com.wayon.car.car.Gear
 import com.wayon.car.car.NaviBridge
 import com.wayon.car.car.UxRestrictions
+import com.wayon.car.server.DepartureCall
+import com.wayon.car.server.DepartureMessage
+import com.wayon.car.server.DeparturePerson
 import com.wayon.car.server.RestAreaApi
 import com.wayon.car.server.ServerClient
 import com.wayon.car.server.ServerMessage
@@ -165,6 +170,10 @@ class WayOnService : LifecycleService() {
         lifecycleScope.launch { server.events.collect(::onServerEvent) }
         // 기어가 D가 되면 QR 화면을 바로 닫는다 (4-2, 주행 중 QR 금지)
         lifecycleScope.launch { parked.collect { if (!it) closeQr() } }
+        // 출발해요: 기어 D면 실제로 출발한 것 → 알림을 닫고 홈으로 (6-8). 기어를 못 읽는 순간(UNKNOWN)은 출발로 보지 않는다
+        lifecycleScope.launch {
+            carSignals.gear.collect { if (it == Gear.DRIVE && serverUi.value.departure != null) closeDeparture("DEPARTED") }
+        }
     }
 
     /** 휴게소 접근·도착·떠남 (app-api.md 5-9). 끊겨 있으면 버린다 (7-2) */
@@ -225,12 +234,151 @@ class WayOnService : LifecycleService() {
                 serverUi.update { it.copy(online = true, trip = trip) }
                 if (trip == null) startTrip()
                 loadPassengers()
+                // 앱을 다시 켰을 때 열린 출발 알림이 있으면 대화를 되살린다
+                message.openCall()?.let { openDeparture(it, message.openCallPeople()) }
             }
-            "ack" -> if (message.reqId == REQ_TRIP_START) {
-                message.ackTripId()?.let { id -> serverUi.update { it.copy(trip = Trip(id)) } }
+            "ack" -> when (message.reqId) {
+                REQ_TRIP_START -> message.ackTripId()?.let { id -> serverUi.update { it.copy(trip = Trip(id)) } }
+                REQ_DEPARTURE_CALL -> message.departureCall()?.let(::onDepartureCalled)
             }
             "passengers.update" -> serverUi.update { it.copy(passengers = message.passengers()) }
-            "error" -> log("서버 오류: reqId=${message.reqId} code=${message.errorCode()}")
+            "departure.status" -> {
+                val people = message.departurePeople()
+                // ack(callId)보다 먼저 와도 버리지 않는다: 보내는 중이면 그대로 담아 둔다
+                if (serverUi.value.departure?.callId == null) {
+                    serverUi.update { ui -> ui.departure?.let { ui.copy(departure = it.copy(people = people)) } ?: ui }
+                } else {
+                    updateDeparture(message.callId()) { it.copy(people = people) }
+                }
+            }
+            "departure.message" -> message.departureMessage()?.let { m ->
+                updateDeparture(m.callId) { it.copy(messages = mergeMessages(it.messages, listOf(m))) }
+            }
+            "departure.closed" -> if (message.callId() == serverUi.value.departure?.callId) {
+                serverUi.update { it.copy(departure = null) }
+                if (message.closedReason() == "EXPIRED") serverUi.update { it.copy(notice = "출발 알림이 30분이 지나 끝났어요") }
+            }
+            "error" -> {
+                log("서버 오류: reqId=${message.reqId} code=${message.errorCode()}")
+                when (message.reqId) {
+                    REQ_DEPARTURE_CALL -> serverUi.update {
+                        it.copy(departure = null, notice = message.errorMessage() ?: "출발 알림을 보내지 못했어요")
+                    }
+                    REQ_DEPARTURE -> departureError(message.errorMessage() ?: "보내지 못했어요")
+                }
+            }
+        }
+    }
+
+    // ---- 출발해요 (car-app-design.md 4-5, 6-8, 출발해요 기획) ----
+
+    /**
+     * 홈의 [출발해요]. 정차 중이고 받을 동승자가 있을 때만. 목적지 이름·남은 시간을 같이 보내 알림 문구에 쓴다.
+     * 서버 ack(callId)를 받을 때까지 대화 화면은 "보내는 중"으로 연다.
+     */
+    fun callDeparture() {
+        val s = _state.value
+        val ui = serverUi.value
+        if (!s.parked || ui.departure != null || ui.departureReceivers.isEmpty()) return
+        val dest = s.drive?.destination
+        val data = if (dest == null) emptyMap() else mapOf("destName" to dest.name, "etaS" to dest.timeS)
+        if (!server.send("departure.call", data, REQ_DEPARTURE_CALL)) {
+            serverUi.update { it.copy(notice = "서버에 연결되지 않아 출발 알림을 보내지 못했어요") }
+            return
+        }
+        serverUi.update { it.copy(departure = DepartureUi(destName = dest?.name, etaS = dest?.timeS)) }
+    }
+
+    /** [천천히 와요] [빨리 와요] */
+    fun sendDepartureQuick(code: String) = sendDepartureMessage(mapOf("kind" to "QUICK", "quickCode" to code))
+
+    /** 텍스트 1~40자, 정차 중에만 (기획 7장) */
+    fun sendDepartureText(text: String) {
+        val body = text.trim().take(Config.MESSAGE_MAX_LEN)
+        if (body.isEmpty() || !_state.value.parked) return
+        sendDepartureMessage(mapOf("kind" to "TEXT", "body" to body))
+    }
+
+    /** [다시 알리기]: 아직 답이 없는 사람에게 다시 푸시. 1분에 1번 */
+    fun remindDeparture() {
+        val d = serverUi.value.departure ?: return
+        val callId = d.callId ?: return
+        if (System.currentTimeMillis() < d.remindLockedUntilMs) return
+        if (!server.send("departure.remind", mapOf("callId" to callId), REQ_DEPARTURE)) {
+            departureError("연결이 끊겨서 보내지 못했어요")
+            return
+        }
+        updateDeparture(callId) { it.copy(remindLockedUntilMs = System.currentTimeMillis() + Config.REMIND_INTERVAL_MS) }
+    }
+
+    /** [취소] */
+    fun cancelDeparture() = closeDeparture("CANCELLED")
+
+    private fun closeDeparture(reason: String) {
+        val callId = serverUi.value.departure?.callId
+        if (callId != null) server.send("departure.close", mapOf("callId" to callId, "reason" to reason), REQ_DEPARTURE)
+        serverUi.update { it.copy(departure = null) }
+    }
+
+    private fun onDepartureCalled(call: DepartureCall) {
+        // ack 전에 취소했거나 출발했으면 서버의 알림도 닫는다
+        if (serverUi.value.departure == null) {
+            server.send("departure.close", mapOf("callId" to call.callId, "reason" to "CANCELLED"), REQ_DEPARTURE)
+            return
+        }
+        openDeparture(call, serverUi.value.departure?.people ?: emptyList())
+    }
+
+    private fun openDeparture(call: DepartureCall, people: List<DeparturePerson>) {
+        val calledAt = runCatching { Instant.parse(call.calledAt).toEpochMilli() }.getOrDefault(System.currentTimeMillis())
+        serverUi.update {
+            it.copy(
+                departure = DepartureUi(
+                    callId = call.callId,
+                    calledAtMs = calledAt,
+                    etaS = call.etaS,
+                    destName = call.destName,
+                    people = people,
+                    messages = it.departure?.takeIf { d -> d.callId == call.callId }?.messages ?: emptyList(),
+                    // 서버도 [출발해요] 뒤 1분은 다시 알리기를 받지 않는다
+                    remindLockedUntilMs = calledAt + Config.REMIND_INTERVAL_MS,
+                ),
+            )
+        }
+        loadDepartureMessages(call.callId)
+    }
+
+    /** 2-5 지난 대화. 그사이 실시간으로 온 메시지와 합친다 */
+    private fun loadDepartureMessages(callId: Long) {
+        val token = carToken ?: return
+        lifecycleScope.launch {
+            runCatching { api.departureMessages(WayOnApi.bearer(token)) }
+                .onSuccess { res -> updateDeparture(callId) { it.copy(messages = mergeMessages(res.messages, it.messages)) } }
+                .onFailure { log("지난 대화 실패: ${it.message}") }
+        }
+    }
+
+    private fun sendDepartureMessage(data: Map<String, Any>) {
+        val callId = serverUi.value.departure?.callId ?: return
+        if (!server.send("departure.message", data + ("callId" to callId), REQ_DEPARTURE)) {
+            departureError("연결이 끊겨서 보내지 못했어요")
+        }
+    }
+
+    private fun departureError(text: String) {
+        val callId = serverUi.value.departure?.callId ?: return
+        updateDeparture(callId) { it.copy(error = text) }
+        lifecycleScope.launch {
+            delay(Config.FAIL_TOAST_MS)
+            updateDeparture(callId) { if (it.error == text) it.copy(error = null) else it }
+        }
+    }
+
+    /** 지금 열린 알림(callId)일 때만 바꾼다 */
+    private fun updateDeparture(callId: Long?, change: (DepartureUi) -> DepartureUi) {
+        serverUi.update { ui ->
+            val d = ui.departure
+            if (d == null || callId == null || d.callId != callId) ui else ui.copy(departure = change(d))
         }
     }
 
@@ -376,7 +524,13 @@ class WayOnService : LifecycleService() {
         const val PREFS = "wayon"
         const val KEY_CONSENT = "locationConsent"
         const val REQ_TRIP_START = "trip.start"
+        const val REQ_DEPARTURE_CALL = "departure.call"
+        const val REQ_DEPARTURE = "departure"
         /** 서버 expiresAt을 못 읽었을 때 (app-api.md 9장 QR 만료 3분) */
         const val QR_FALLBACK_TTL_MS = 180_000L
     }
 }
+
+/** messageId로 겹친 것을 빼고 순서대로 (지난 대화 + 실시간 메시지) */
+internal fun mergeMessages(a: List<DepartureMessage>, b: List<DepartureMessage>): List<DepartureMessage> =
+    (a + b).associateBy { it.messageId }.values.sortedBy { it.messageId }

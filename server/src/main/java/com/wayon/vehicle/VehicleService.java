@@ -246,7 +246,8 @@ public class VehicleService {
 		return authorization.substring("Bearer ".length());
 	}
 
-	private static VehicleDto.Message toMessage(VehicleRows.Message m) {
+	/** 2-5 메시지 1개. 출발해요 실시간 메시지(departure.message)도 같은 모양 */
+	public static VehicleDto.Message toMessage(VehicleRows.Message m) {
 		String nickname = m.passengerId() == null ? "운전자" : m.revoked() ? "(나간 동승자)" : m.nickname();
 		return new VehicleDto.Message(m.id(), m.callId(), new VehicleDto.Sender(m.passengerId(), nickname), m.kind(),
 				m.quickCode(), m.body(), toInstant(m.sentAt()));

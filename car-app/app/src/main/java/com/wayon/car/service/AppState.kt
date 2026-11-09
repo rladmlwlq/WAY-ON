@@ -6,6 +6,8 @@ import com.wayon.car.car.DriveInfo
 import com.wayon.car.car.Energy
 import com.wayon.car.car.Gear
 import com.wayon.car.car.UxRestrictions
+import com.wayon.car.server.DepartureMessage
+import com.wayon.car.server.DeparturePerson
 import com.wayon.car.server.Passenger
 import com.wayon.car.server.Trip
 
@@ -43,10 +45,35 @@ data class ServerUi(
     val qr: QrUi? = null,
     /** 홈에 띄우는 한 줄 안내 (7-4 등) */
     val notice: String? = null,
+    /** 열린 출발 알림 (출발해요 대화, 4-5). 없으면 null */
+    val departure: DepartureUi? = null,
 ) {
     val onlinePassengers: List<Passenger> get() = passengers.filter { it.online }
     val passengersFull: Boolean get() = passengers.size >= Config.MAX_PASSENGERS
+
+    /** [출발해요]를 받을 사람: 지금 폰이 붙어 있거나 알림을 켠 동승자 (기획 7장) */
+    val departureReceivers: List<Passenger> get() = passengers.filter { it.online || it.pushEnabled }
 }
+
+/**
+ * 출발해요 대화 (car-app-design.md 4-5, 출발해요 기획 6-2).
+ * callId가 null이면 [출발해요]를 눌러 서버 답(ack)을 기다리는 중.
+ */
+data class DepartureUi(
+    val callId: Long? = null,
+    /** 기기 시각(ms). "3분 지남"에 쓴다 */
+    val calledAtMs: Long = System.currentTimeMillis(),
+    val etaS: Int? = null,
+    val destName: String? = null,
+    /** 사람별 마지막 빠른 답장 (departure.status) */
+    val people: List<DeparturePerson> = emptyList(),
+    /** 지난 대화 + 이번 대화 (최신이 마지막) */
+    val messages: List<DepartureMessage> = emptyList(),
+    /** [다시 알리기]를 이 시각(기기 ms)까지 잠근다 (1분에 1번) */
+    val remindLockedUntilMs: Long = 0,
+    /** 보내기 실패 문구 (3초 뒤 지움) */
+    val error: String? = null,
+)
 
 /** QR 화면 (4-2). url이 null이면 받는 중이거나 실패([error]) */
 data class QrUi(

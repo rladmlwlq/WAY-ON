@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.wayon.car.service.AppState
 import com.wayon.car.service.WayOnService
+import com.wayon.car.ui.DepartureScreen
 import com.wayon.car.ui.HomeScreen
 import com.wayon.car.ui.QrScreen
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,7 +38,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * 화면 1개 (car-app-design.md 2장). 앱이 켜지면 WayOnService를 띄우고 붙어서 AppState를 그린다.
- * 화면은 상태를 읽기만 하고, 버튼은 서비스 함수를 부른다. 화면 6개 중 지금은 홈·QR·휴게소 지도가 있다 (4장).
+ * 화면은 상태를 읽기만 하고, 버튼은 서비스 함수를 부른다. 화면 6개 중 지금은 홈·QR·휴게소 지도·출발해요 대화가 있다 (4장).
  */
 class MainActivity : ComponentActivity() {
 
@@ -78,13 +79,23 @@ class MainActivity : ComponentActivity() {
                     Column {
                         // 모든 화면 위 오프라인 띠 (4장, 7-2)
                         if (!state.server.online) OfflineBar()
-                        if (state.server.qr != null && state.parked) {
-                            QrScreen(state, onBack = { service?.closeQr() }, onRenew = { service?.openQr() })
-                        } else {
-                            HomeScreen(
+                        val departure = state.server.departure
+                        when {
+                            state.server.qr != null && state.parked ->
+                                QrScreen(state, onBack = { service?.closeQr() }, onRenew = { service?.openQr() })
+                            // 출발해요 대화는 정차 중에만 (기어 D면 서비스가 닫는다, 4-5)
+                            departure != null && state.parked -> DepartureScreen(
+                                departure,
+                                onQuick = { service?.sendDepartureQuick(it) },
+                                onText = { service?.sendDepartureText(it) },
+                                onRemind = { service?.remindDeparture() },
+                                onCancel = { service?.cancelDeparture() },
+                            )
+                            else -> HomeScreen(
                                 state,
                                 onOpenQr = { service?.openQr() },
                                 onConsent = { service?.giveLocationConsent() },
+                                onDeparture = { service?.callDeparture() },
                             )
                         }
                     }

@@ -1,5 +1,6 @@
 package com.wayon.car.server
 
+import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 
@@ -31,7 +32,70 @@ data class ServerMessage(val type: String, val reqId: String?, val data: JsonObj
 
     /** error 메시지의 code */
     fun errorCode(): String? = data.str("code")
+
+    /** error 메시지의 message (차 화면에 그대로 보여도 되는 문장) */
+    fun errorMessage(): String? = data.str("message")
+
+    /** auth.ok의 openCall, departure.call의 ack. callId가 없으면 null */
+    fun departureCall(source: JsonObject? = data): DepartureCall? {
+        val o = source ?: return null
+        return DepartureCall(
+            callId = o.get("callId")?.takeIf { it.isJsonPrimitive }?.asLong ?: return null,
+            calledAt = o.str("calledAt") ?: "",
+            etaS = o.get("etaS")?.takeIf { it.isJsonPrimitive }?.asInt,
+            destName = o.str("destName"),
+        )
+    }
+
+    fun openCall(): DepartureCall? = departureCall(data.obj("openCall"))
+
+    /** departure.status의 people, auth.ok openCall의 people */
+    fun departurePeople(source: JsonObject? = data): List<DeparturePerson> =
+        source?.getAsJsonArray("people")?.mapNotNull { runCatching { GSON.fromJson(it, DeparturePerson::class.java) }.getOrNull() }
+            ?: emptyList()
+
+    fun openCallPeople(): List<DeparturePerson> = departurePeople(data.obj("openCall"))
+
+    /** departure.message */
+    fun departureMessage(): DepartureMessage? = runCatching { GSON.fromJson(data, DepartureMessage::class.java) }
+        .getOrNull()?.takeIf { it.messageId > 0 }
+
+    fun callId(): Long? = data.get("callId")?.takeIf { it.isJsonPrimitive }?.asLong
+
+    /** departure.closed의 reason (DEPARTED, CANCELLED, EXPIRED) */
+    fun closedReason(): String? = data.str("reason")
+
+    private companion object {
+        val GSON = Gson()
+    }
 }
+
+/** 출발해요 (A2, app-api.md 5-12, 7장). 열린 출발 알림 1건 */
+data class DepartureCall(val callId: Long, val calledAt: String, val etaS: Int?, val destName: String?)
+
+/** 사람 1명의 마지막 빠른 답장 (null이면 응답 없음) */
+data class DeparturePerson(
+    val passengerId: Long,
+    val nickname: String,
+    val lastQuickCode: String?,
+    val pushEnabled: Boolean,
+)
+
+/** 2-5, 7장 departure.message. sender.passengerId가 null이면 운전자 */
+data class DepartureMessage(
+    val messageId: Long,
+    val callId: Long,
+    val sender: DepartureSender,
+    val kind: String,
+    val quickCode: String?,
+    val body: String?,
+    val sentAt: String,
+)
+
+data class DepartureSender(val passengerId: Long?, val nickname: String)
+
+/** 2-5 응답 */
+data class DepartureMessages(val messages: List<DepartureMessage> = emptyList(), val hasMore: Boolean = false)
 
 private fun JsonObject.obj(name: String): JsonObject? = get(name)?.takeIf { it.isJsonObject }?.asJsonObject
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ApiError, getMe, type Me } from './api'
+import { DepartureChat } from './DepartureChat'
 import { Notice } from './Notice'
+import { PushToggle } from './PushToggle'
 import { RestAreaCard } from './RestAreaCard'
 import { useTripSocket } from './useTripSocket'
 
@@ -45,6 +47,16 @@ export function TripScreen({ token, onSignedOut }: Props) {
         <header className="brand">WAY:ON</header>
         <h1>{me ? `${me.nickname}님, 연결됐어요` : '연결됐어요'}</h1>
 
+        {/* 출발해요가 열려 있으면 맨 위에 (알림을 눌러 들어온 화면) */}
+        {socket.departure && (
+          <DepartureChat
+            departure={socket.departure}
+            myPassengerId={socket.myPassengerId}
+            send={socket.send}
+            onDismiss={socket.dismissDeparture}
+          />
+        )}
+
         {socket.restArea && <RestAreaCard info={socket.restArea} />}
 
         <section className="card" aria-live="polite">
@@ -55,14 +67,7 @@ export function TripScreen({ token, onSignedOut }: Props) {
           <p className="help">{status.detail}</p>
         </section>
 
-        {/* 알림 허용(출발해요 Web Push)은 출발해요 작업 때 붙인다. 브라우저가 버튼을 누른 뒤에만 권한을 묻는다 */}
-        <section className="card">
-          <strong>출발 알림 받기</strong>
-          <p className="help">휴게소에서 차가 출발할 때 알려 드려요. 곧 켤 수 있어요.</p>
-          <button type="button" className="secondary" disabled>
-            알림 켜기 (준비 중)
-          </button>
-        </section>
+        <PushToggle token={token} serverEnabled={me ? me.pushEnabled : null} />
       </main>
       {ended && <Notice title={ended.title} message={ended.message} onConfirm={() => onSignedOut(ended.message)} />}
     </>
