@@ -40,4 +40,11 @@
 		INSERT IGNORE INTO trip_passenger (trip_id, passenger_id, joined_at, consented_at)
 		VALUES (#{tripId}, #{passengerId}, #{now}, #{now})
 	</insert>
+
+	<select id="select_restAreaRequestExtId" resultType="string">
+		SELECT wr.place_ext_id
+		FROM waypoint_request wr
+		JOIN trip t ON t.id = wr.trip_id
+		WHERE wr.id = #{requestId} AND t.vehicle_id = #{vehicleId} AND wr.place_type = 'REST_AREA'
+	</select>
 </mapper>

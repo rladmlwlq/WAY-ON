@@ -179,7 +179,7 @@ server/src/main/resources/
 
 | 항목 | 내용 |
 |---|---|
-| WebSocket | `/ws` 적용 완료 (`com.wayon.ws`). 인증·ping·`trip.start`/`trip.end`·5분 만료·`passengers.update`까지. 위치·경로·경유지·출발해요 메시지는 아직 |
+| WebSocket | `/ws` 적용 완료 (`com.wayon.ws`). 인증·ping·`trip.start`/`trip.end`·5분 만료·`passengers.update`, 휴게소 `restarea.*` → 폰 `restarea.info`까지. 위치·경로·경유지·에너지·주차장·출발해요 메시지는 아직 |
 | 허용 Origin | CORS와 WebSocket 모두 `http://localhost:5173`과 `WEB_URL`(Vercel 운영 주소, `server/.env`) 적용 완료. Origin 헤더가 없는 차량 앱은 그대로 통과 |
 | 웹 푸시 키 | VAPID 키 쌍을 만들어 `server/.env`에 보관. 공개 키(`VAPID_PUBLIC_KEY`)는 서버 API(`GET /api/push/vapid-public-key`)로 웹에 전달. 없으면 503 |
 | 배포 | HTTPS 도메인 필요. 배포처는 미정 |

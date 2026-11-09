@@ -74,6 +74,25 @@ export interface Me {
   tokenExpiresAt: string
 }
 
+/** 3-7 휴게소 상세. restarea.info의 restArea도 같은 모양 */
+export interface RestAreaDetail {
+  restAreaId: string
+  name: string
+  routeName: string
+  direction: string
+  topItems: { rank: number; name: string; store: string | null; price: number | null }[]
+  /** 판매 순위 기준 달 (예: 2026-10) */
+  topMonth: string | null
+  brands: { name: string; open: string | null; close: string | null; openNow: boolean | null }[]
+  facilities: { code: string; name: string; detail: string | null }[]
+}
+
+/** 7장 restarea.info (A1). LEFT면 카드를 닫는다 */
+export interface RestAreaInfo {
+  phase: 'APPROACH' | 'ARRIVED'
+  restArea: RestAreaDetail
+}
+
 /** 3-1 QR로 연결 */
 export function connect(code: string, nickname: string, locationConsent: boolean) {
   return request<Connected>('/api/connect', {
