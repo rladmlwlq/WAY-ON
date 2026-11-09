@@ -1,14 +1,17 @@
 package com.wayon.car.service
 
+import com.wayon.car.Config
 import com.wayon.car.car.CarLocation
 import com.wayon.car.car.DriveInfo
 import com.wayon.car.car.Energy
 import com.wayon.car.car.Gear
 import com.wayon.car.car.UxRestrictions
+import com.wayon.car.server.Passenger
+import com.wayon.car.server.Trip
 
 /**
  * 화면이 읽는 상태 한 덩어리 (car-app-design.md 2-2, 3장). 서비스 안에서만 바뀐다.
- * 지금 있는 것만 넣었다. online, trip, passengers, pendingRequest, call 등은 기능을 붙일 때 더한다.
+ * 지금 있는 것만 넣었다. pendingRequest, call 등은 기능을 붙일 때 더한다.
  */
 data class AppState(
     val gear: Gear = Gear.UNKNOWN,
@@ -20,7 +23,35 @@ data class AppState(
     val restArea: RestAreaUi = RestAreaUi(),
     /** 플랫폼 주행 규제 (CarUxRestrictions). null이면 못 받은 것 */
     val uxRestricted: Boolean? = null,
+    val server: ServerUi = ServerUi(),
 ) {
     /** 기어 P이고 주행 규제가 없을 때만 정차. 기어를 못 읽으면 주행 중으로 본다 (5장, 안전한 쪽) */
     val parked: Boolean get() = UxRestrictions.isParked(gear, uxRestricted)
 }
+
+/** 서버 연결 쪽 상태 (car-app-design.md 3장, 7-2) */
+data class ServerUi(
+    /** WebSocket이 auth.ok까지 됨 */
+    val online: Boolean = false,
+    /** 지금 세션, 없으면 null ("연결 준비 중") */
+    val trip: Trip? = null,
+    /** 등록 동승자 (passengers.update) */
+    val passengers: List<Passenger> = emptyList(),
+    /** 차량 쪽 위치 공유 동의. 없으면 세션을 열 수 없다 (7-3) */
+    val locationConsent: Boolean = false,
+    /** QR 화면이 열려 있으면 그 상태, 닫혀 있으면 null (4-2) */
+    val qr: QrUi? = null,
+    /** 홈에 띄우는 한 줄 안내 (7-4 등) */
+    val notice: String? = null,
+) {
+    val onlinePassengers: List<Passenger> get() = passengers.filter { it.online }
+    val passengersFull: Boolean get() = passengers.size >= Config.MAX_PASSENGERS
+}
+
+/** QR 화면 (4-2). url이 null이면 받는 중이거나 실패([error]) */
+data class QrUi(
+    val url: String? = null,
+    /** 기기 시각(ms) 기준 만료 */
+    val expiresAtMs: Long = 0,
+    val error: String? = null,
+)
