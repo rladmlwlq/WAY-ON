@@ -25,7 +25,8 @@ import kotlinx.coroutines.launch
 
 /**
  * 앱의 두뇌 (car-app-design.md 2장). 화면을 닫아도 서버 통신과 차량 값 읽기를 계속한다.
- * 지금 붙은 것: CarSignals(기어·에너지), NaviBridge(위치·남은 거리), Voice, 휴게소 도착 안내(RestAreaGuide).
+ * 지금 붙은 것: CarSignals(기어·에너지), NaviBridge(위치·남은 거리), Voice, 휴게소 도착 안내(RestAreaGuide),
+ * 에너지 제안·목적지 근처 주차장 판단(DestinationAlerts).
  * ServerClient가 붙으면 [report]가 실제로 서버에 보낸다.
  *
  * 콜백은 모두 lifecycleScope(메인 스레드)에서 처리해서, 상태를 바꾸는 코드가 한 스레드에서만 돈다.
@@ -39,6 +40,7 @@ class WayOnService : LifecycleService() {
     private lateinit var voice: Voice
     private lateinit var myWaypoints: MyWaypoints
     private lateinit var restAreaGuide: RestAreaGuide
+    private val destinationAlerts = DestinationAlerts()
     private val restAreaApi by lazy { RestAreaApi.create() }
 
     private val _state = MutableStateFlow(AppState())
@@ -87,6 +89,12 @@ class WayOnService : LifecycleService() {
         lifecycleScope.launch { navi.events.collect(guide::onNavi) }
         lifecycleScope.launch { carSignals.gear.collect(guide::onGear) }
 
+        // 에너지 제안·목적지 근처 주차장 (6-5, 6-6): 남은 거리·시간이나 에너지가 바뀔 때마다 본다
+        lifecycleScope.launch {
+            combine(navi.drive, carSignals.energy) { drive, energy -> destinationAlerts.update(drive?.destination, energy) }
+                .collect { it.forEach(::sendAlert) }
+        }
+
         // 정차 = 기어 P이고 주행 규제 없음. 화면(AppState.parked)과 같은 기준
         val parked = combine(carSignals.gear, uxRestrictions.restricted, UxRestrictions::isParked)
 
@@ -126,9 +134,24 @@ class WayOnService : LifecycleService() {
         }
     }
 
-    /** 서버로 보낼 메시지. ServerClient(WebSocket)가 생기면 그쪽 send로 바꾼다 (app-api.md 5-9) */
-    private fun report(type: String, requestId: Long) {
-        log("서버로 보낼 것 (아직 연결 없음): $type requestId=$requestId")
+    /** 휴게소 접근·도착·떠남 (app-api.md 5-9) */
+    private fun report(type: String, requestId: Long) = send(type, mapOf("requestId" to requestId))
+
+    /** 에너지 제안·목적지 근처 주차장 (app-api.md 5-7, 5-8) */
+    private fun sendAlert(alert: DestinationAlerts.Alert) = when (alert) {
+        is DestinationAlerts.Alert.EnergyLow -> send(
+            DestinationAlerts.TYPE_ENERGY_LOW,
+            mapOf("energyType" to alert.energyType.name, "rangeM" to alert.rangeM, "remainDistM" to alert.remainDistM),
+        )
+        is DestinationAlerts.Alert.ParkingNearDest -> send(
+            DestinationAlerts.TYPE_PARKING_NEAR_DEST,
+            mapOf("remainDistM" to alert.remainDistM, "remainTimeS" to alert.remainTimeS),
+        )
+    }
+
+    /** 서버로 보낼 메시지. ServerClient(WebSocket)가 생기면 그쪽 send로 바꾼다 */
+    private fun send(type: String, data: Map<String, Any?>) {
+        log("서버로 보낼 것 (아직 연결 없음): $type $data")
     }
 
     private fun loadRestAreaMap(name: String, extId: String) {
