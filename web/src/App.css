@@ -279,3 +279,107 @@ fieldset:disabled {
   background: var(--field);
   border-radius: 999px;
 }
+
+/* 출발해요 대화 (DepartureChat) */
+.departure h2 {
+  margin: 6px 0 2px;
+  font-size: 20px;
+  color: var(--text-h);
+}
+
+.people {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.bubbles {
+  margin: 0;
+  padding: 12px 0 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 45svh;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+.bubble {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.bubble.mine {
+  align-items: flex-end;
+}
+
+.bubble .who {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.bubble .say {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.bubble.mine .say {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.bubble.driver .say {
+  background: var(--notice-bg);
+}
+
+.bubble .divider {
+  align-self: stretch;
+  margin: 6px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.quick {
+  display: grid;
+  gap: 8px;
+}
+
+.say-form {
+  display: flex;
+  gap: 8px;
+}
+
+.say-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 17px; /* 16px 미만이면 iOS가 확대한다 */
+  color: var(--text-h);
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.say-form button {
+  flex: none;
+}
+
+.people .me {
+  font-weight: 400;
+  color: var(--muted);
+}

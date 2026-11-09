@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wayon.departure.DepartureMapper">
+
+	<sql id="callColumns">
+		id, vehicle_id, trip_id, status, eta_min, dest_name, called_at, last_reminded_at
+	</sql>
+
+	<select id="select_vehicleIdForUpdate" resultType="long">
+		SELECT id FROM vehicle WHERE id = #{vehicleId} FOR UPDATE
+	</select>
+
+	<select id="select_openCall" resultType="com.wayon.departure.DepartureRows$Call">
+		SELECT <include refid="callColumns"/>
+		FROM departure_call
+		WHERE vehicle_id = #{vehicleId} AND status = 'OPEN'
+		ORDER BY id DESC
+		LIMIT 1
+	</select>
+
+	<select id="select_call" resultType="com.wayon.departure.DepartureRows$Call">
+		SELECT <include refid="callColumns"/> FROM departure_call WHERE id = #{callId}
+	</select>
+
+	<insert id="insert_call">
+		INSERT INTO departure_call (vehicle_id, trip_id, status, eta_min, dest_name, called_at)
+		VALUES (#{vehicleId}, #{tripId}, 'OPEN', #{etaMin}, #{destName}, #{now})
+	</insert>
+
+	<update id="update_callClosed">
+		UPDATE departure_call SET status = #{status}, closed_at = #{now}
+		WHERE id = #{callId} AND status = 'OPEN'
+	</update>
+
+	<update id="update_callReminded">
+		UPDATE departure_call SET last_reminded_at = #{now} WHERE id = #{callId}
+	</update>
+
+	<select id="select_staleOpenCalls" resultType="com.wayon.departure.DepartureRows$Call">
+		SELECT <include refid="callColumns"/>
+		FROM departure_call
+		WHERE status = 'OPEN' AND called_at &lt; #{calledBefore}
+	</select>
+
+	<!--
+		받는 사람 (기획 8장): 해제하지 않은 이 차량 동승자 중
+		지금 세션(ACTIVE)에 있었거나, 끝난 지 2시간 안의 세션에 있었던 사람.
+		마지막 빠른 답장과 보낸 메시지 수는 이 출발 알림 안에서만 센다.
+	-->
+	<select id="select_people" resultType="com.wayon.departure.DepartureRows$Person">
+		SELECT p.id AS passenger_id, p.nickname, p.push_endpoint, p.push_p256dh, p.push_auth,
+			(SELECT m.quick_code FROM departure_message m
+				WHERE m.call_id = #{callId} AND m.passenger_id = p.id AND m.kind = 'QUICK'
+				ORDER BY m.id DESC LIMIT 1) AS last_quick_code,
+			(SELECT COUNT(*) FROM departure_message m
+				WHERE m.call_id = #{callId} AND m.passenger_id = p.id) AS messages
+		FROM passenger p
+		WHERE p.vehicle_id = #{vehicleId} AND p.revoked_at IS NULL
+			AND EXISTS (
+				SELECT 1 FROM trip_passenger tp JOIN trip t ON t.id = tp.trip_id
+				WHERE tp.passenger_id = p.id AND t.vehicle_id = #{vehicleId}
+					AND (t.status = 'ACTIVE' OR t.ended_at &gt;= #{prevEndedAfter}))
+		ORDER BY p.id
+	</select>
+
+	<insert id="insert_message">
+		INSERT INTO departure_message (call_id, passenger_id, kind, quick_code, body, sent_at)
+		VALUES (#{callId}, #{passengerId}, #{kind}, #{quickCode}, #{body}, #{now})
+	</insert>
+
+	<select id="select_lastMessage" resultType="com.wayon.vehicle.VehicleRows$Message">
+		SELECT m.id, m.call_id, m.passenger_id, p.nickname, p.revoked_at IS NOT NULL AS revoked,
+			m.kind, m.quick_code, m.body, m.sent_at
+		FROM departure_message m
+		LEFT JOIN passenger p ON p.id = m.passenger_id
+		WHERE m.call_id = #{callId}
+		ORDER BY m.id DESC
+		LIMIT 1
+	</select>
+
+	<select id="select_recentMessageCount" resultType="int">
+		SELECT COUNT(*) FROM departure_message
+		WHERE call_id = #{callId} AND passenger_id = #{passengerId} AND sent_at &gt;= #{since}
+	</select>
+
+	<update id="update_pushRemoved">
+		UPDATE passenger
+		SET push_endpoint = NULL, push_p256dh = NULL, push_auth = NULL, push_updated_at = NULL
+		WHERE id = #{passengerId}
+	</update>
+
+	<delete id="delete_oldMessages">
+		DELETE FROM departure_message WHERE sent_at &lt; #{before}
+	</delete>
+</mapper>

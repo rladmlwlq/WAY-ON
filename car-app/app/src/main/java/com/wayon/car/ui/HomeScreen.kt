@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -20,7 +22,7 @@ import com.wayon.car.service.ArrivedCard
 
 /**
  * 홈 (car-app-design.md 4-1). 동승자 줄, 목적지 남은 시간, 휴게소 안내, 정차 중 [동승자 연결].
- * [출발해요]·[주변 장소] 버튼은 그 기능을 붙일 때 더한다.
+ * 정차 중이고 받을 동승자가 있으면 [출발해요]. [주변 장소] 버튼은 그 기능을 붙일 때 더한다.
  * 주행 중에는 짧은 문구만 보인다. 휴게소에 도착(기어 P)하면 휴게소 지도로 바뀐다 (4-7).
  */
 @Composable
@@ -29,8 +31,11 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onOpenQr: () -> Unit = {},
     onConsent: () -> Unit = {},
+    onDeparture: () -> Unit = {},
 ) {
     val arrived = state.restArea.arrived
+    // [출발해요]: 정차 중이고 알림을 받을 동승자가 1명 이상일 때 (출발해요 기획 7장)
+    val canDepart = state.parked && state.server.locationConsent && state.server.departureReceivers.isNotEmpty()
     // 도착은 내비 도착 콜백으로 달리는 중에도 생길 수 있다. 정차(기어 P, 주행 규제 없음)일 때만 지도를 연다
     val map = arrived?.map
     if (state.parked && map != null) {
@@ -41,7 +46,9 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("WAY:ON", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(map.name, style = MaterialTheme.typography.titleLarge)
+                Text(map.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                // 휴게소 지도 위 [출발해요] (4-7)
+                if (canDepart) DepartureButton(onDeparture)
             }
             RestAreaMapScreen(map, state.location, Modifier.weight(1f))
         }
@@ -73,9 +80,22 @@ fun HomeScreen(
             if (!server.locationConsent) {
                 ConsentCard(onConsent)
             } else {
-                Button(onClick = onOpenQr) { Text("동승자 연결", style = MaterialTheme.typography.titleLarge) }
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (canDepart) DepartureButton(onDeparture)
+                    OutlinedButton(onClick = onOpenQr, modifier = Modifier.heightIn(min = 64.dp)) {
+                        Text("동승자 연결", style = MaterialTheme.typography.titleLarge)
+                    }
+                }
             }
         }
+    }
+}
+
+/** 큰 버튼 하나 (출발해요 기획 6-1) */
+@Composable
+private fun DepartureButton(onClick: () -> Unit) {
+    Button(onClick = onClick, modifier = Modifier.heightIn(min = 64.dp)) {
+        Text("🚗 출발해요", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
     }
 }
 

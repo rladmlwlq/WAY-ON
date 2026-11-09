@@ -93,6 +93,79 @@ export interface RestAreaInfo {
   restArea: RestAreaDetail
 }
 
+/** 출발해요 (A2). 사람 1명의 마지막 빠른 답장. null이면 응답 없음 */
+export interface DeparturePerson {
+  passengerId: number
+  nickname: string
+  lastQuickCode: QuickCode | null
+  pushEnabled: boolean
+}
+
+export type QuickCode = 'TOILET' | 'IN_LINE' | 'COMING' | 'TAKE_TIME' | 'HURRY'
+
+/** 2-5, 7장 departure.message. sender.passengerId가 null이면 운전자 */
+export interface DepartureMessage {
+  messageId: number
+  callId: number
+  sender: { passengerId: number | null; nickname: string }
+  kind: 'QUICK' | 'TEXT'
+  quickCode: QuickCode | null
+  body: string | null
+  sentAt: string
+}
+
+/** 열린 출발 알림 (departure.called, auth.ok의 openCall) */
+export interface DepartureCall {
+  callId: number
+  calledAt: string
+  etaS: number | null
+  destName: string | null
+}
+
+/** 2-5 지난 대화 (최신이 마지막) */
+export function getDepartureMessages(token: string, before?: number) {
+  const query = before ? `?before=${before}` : ''
+  return request<{ messages: DepartureMessage[]; hasMore: boolean }>(`/api/vehicles/me/departure-messages${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+/** 3-3 */
+export function getVapidKey() {
+  return request<{ publicKey: string }>('/api/push/vapid-public-key')
+}
+
+/** 3-4. 브라우저 PushSubscription.toJSON() 그대로 */
+export async function savePushSubscription(token: string, subscription: PushSubscriptionJSON) {
+  await requestNoBody('/api/passengers/me/push-subscription', {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(subscription),
+  })
+}
+
+/** 3-5 */
+export async function deletePushSubscription(token: string) {
+  await requestNoBody('/api/passengers/me/push-subscription', {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+/** 204처럼 본문 없는 응답 */
+async function requestNoBody(path: string, init: RequestInit) {
+  let res: Response
+  try {
+    res = await fetch(API_URL + path, init)
+  } catch {
+    throw new ApiError(0, 'NETWORK', '서버에 연결하지 못했어요. 잠시 뒤에 다시 시도해 주세요')
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new ApiError(res.status, body?.code ?? 'UNKNOWN', body?.message ?? '잠시 뒤에 다시 시도해 주세요')
+  }
+}
+
 /** 3-1 QR로 연결 */
 export function connect(code: string, nickname: string, locationConsent: boolean) {
   return request<Connected>('/api/connect', {

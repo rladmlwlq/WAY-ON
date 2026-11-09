@@ -302,7 +302,7 @@ Response `200`
 ```
 - `role`: `CAR` | `PASSENGER`. 동승자에게는 `"me": {"passengerId": 12, "nickname": "민지"}`가 더 붙습니다.
 - `trip`: 그 차량의 ACTIVE 세션, 없으면 `null`.
-- `openCall`: 열려 있는 출발 알림이 있으면 `departure.called`와 같은 내용, 없으면 `null` (폰을 늦게 열어도 대화 화면으로 바로 가게).
+- `openCall`: 열려 있는 출발 알림이 있으면 `{"callId", "calledAt", "etaS", "destName", "people": [departure.status의 사람 …]}`, 없으면 `null` (폰을 늦게 열거나 차 앱을 다시 켜도 대화 화면으로 바로 가게).
 - 동승자는 `auth.ok` 직후 서버가 `route.update`, `trip.state`를 한 번씩 보내 줍니다 (지도 그리기용).
 
 ### 4-2. 메시지 모양
@@ -440,7 +440,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 출발 알림은 **차량 토큰만** 열 수 있습니다. 상세 규칙은 출발해요 기획 7장.
 | 메시지 | data | 비고 |
 |---|---|---|
-| `departure.call` | `{}` | 정차 중에만 (차량 앱이 판단). 이미 `OPEN`이 있으면 `error CALL_ALREADY_OPEN` |
+| `departure.call` | `{"destName": "부산역", "etaS": 5400}` (둘 다 없어도 됨) | 정차 중에만 (차량 앱이 판단). 목적지 이름·남은 시간은 차량 앱이 내비 값으로 채워 알림 문구에 씀 (2026-11-09 추가). 응답 `ack {"callId", "calledAt", "etaS", "destName", "nextRestAreaM"}`를 먼저 보내고 그 뒤 `departure.status`. 이미 `OPEN`이 있으면 `error CALL_ALREADY_OPEN` |
 | `departure.remind` | `{"callId": 40}` | 1분에 1번. 응답 없는 사람에게만 다시 푸시 |
 | `departure.close` | `{"callId": 40, "reason": "DEPARTED"}` | `DEPARTED` 출발 / `CANCELLED` 취소 |
 | `departure.message` | `{"callId": 40, "kind": "QUICK", "quickCode": "HURRY"}` 또는 `{"callId": 40, "kind": "TEXT", "body": "B동 앞이에요"}` | 운전자 빠른 답장은 `TAKE_TIME`, `HURRY`만 |
@@ -529,7 +529,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 Service Worker가 받는 JSON. 페이지가 열려 있어도 `departure.called`와 같이 보냅니다 (알림 중복은 Service Worker가 `tag`로 합침).
 ```json
 {"kind": "DEPARTURE_CALLED", "callId": 40, "title": "곧 출발해요",
- "body": "부산역까지 약 3시간 30분 · 답장해 주세요", "url": "/trip?call=40", "tag": "departure-40"}
+ "body": "부산역까지 약 3시간 30분 · 답장해 주세요", "url": "/?call=40", "tag": "departure-40"}
 ```
 - `notificationclick`에서 `clients.openWindow(url)`. 열려 있는 창이 있으면 그 창을 앞으로.
 - 푸시 서버가 `404`·`410`을 주면 구독을 지웁니다 (erd.md 출발 알림 규칙).
@@ -557,6 +557,7 @@ Service Worker가 받는 JSON. 페이지가 열려 있어도 `departure.called`�
 | `CALL_ALREADY_OPEN` | 409 | 열린 출발 알림이 있음 | — (기존 것을 보여 줌) |
 | `CALL_CLOSED` | 409 | 닫힌 출발 알림에 답장 | "출발 알림이 끝났어요" |
 | `REMIND_TOO_SOON` | 429 | 다시 알리기 1분 안 됨 | "잠시 뒤에 다시 알릴 수 있어요" |
+| `MESSAGE_TOO_FAST` | 429 | 동승자가 출발해요 메시지를 1초에 2건 이상 | "조금 천천히 보내 주세요" |
 | `MESSAGE_INVALID` | 400 | 빠른 답장 코드가 그 사람 것이 아님, 텍스트 1~40자 아님 | — |
 | `EXTERNAL_UNAVAILABLE` | 503 | 외부 API 실패·한도 초과 (오피넷 300건 등) | "잠시 뒤에 다시 시도해 주세요" |
 | `BAD_REQUEST` | 400 | 형식 틀림 | — |
