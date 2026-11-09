@@ -1,0 +1,188 @@
+package com.wayon.ws;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
+
+import com.wayon.common.ApiException;
+import com.wayon.trip.TripService;
+import com.wayon.vehicle.VehicleService;
+
+import jakarta.annotation.PreDestroy;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * /ws (app-api.md 4장): 첫 메시지 인증, ping, 세션 시작·끝, 5분 무통신 만료.
+ * 세션이 끝나도 동승자 연결은 닫지 않고 trip.ended만 보낸다 (4-3의 4410은 쓰지 않음, 9장 정하지 않은 것)
+ */
+@Component
+public class WsHandler extends TextWebSocketHandler {
+
+	private static final Logger log = LoggerFactory.getLogger(WsHandler.class);
+	private static final long AUTH_TIMEOUT_S = 5;
+	private static final long EXPIRE_CHECK_S = 30;
+
+	private final WsSessions sessions;
+	private final VehicleService vehicles;
+	private final TripService trips;
+	private final JsonMapper json;
+	private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor();
+
+	public WsHandler(WsSessions sessions, VehicleService vehicles, TripService trips, JsonMapper json) {
+		this.sessions = sessions;
+		this.vehicles = vehicles;
+		this.trips = trips;
+		this.json = json;
+		timer.scheduleWithFixedDelay(this::expireTrips, EXPIRE_CHECK_S, EXPIRE_CHECK_S, TimeUnit.SECONDS);
+	}
+
+	@PreDestroy
+	void stop() {
+		timer.shutdownNow();
+	}
+
+	@Override
+	public void afterConnectionEstablished(WebSocketSession session) {
+		sessions.open(session);
+		timer.schedule(() -> {
+			if (WsSessions.client(session) == null) {
+				WsSessions.close(session, WsSessions.AUTH_FAILED);
+			}
+		}, AUTH_TIMEOUT_S, TimeUnit.SECONDS);
+	}
+
+	@Override
+	protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+		Map<?, ?> m = parse(message.getPayload());
+		String type = m.get("type") instanceof String t ? t : "";
+		String reqId = m.get("reqId") instanceof String r ? r : null;
+		Map<?, ?> data = m.get("data") instanceof Map<?, ?> d ? d : Map.of();
+
+		WsSessions.Client client = WsSessions.client(session);
+		if (client == null) {
+			auth(session, type, data);
+			return;
+		}
+		try {
+			if (client.isCar()) {
+				trips.save_carActivity(client.vehicleId());
+			}
+			switch (type) {
+				case "ping" -> sessions.send(session, "pong", null, null);
+				case "trip.start" -> tripStart(session, requireCar(client), reqId, data);
+				case "trip.end" -> tripEnd(session, requireCar(client), reqId);
+				default -> throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "요청 형식이 맞지 않아요");
+			}
+		} catch (ApiException e) {
+			sessions.send(session, "error", reqId, Map.of("code", e.getCode(), "message", e.getMessage()));
+		}
+	}
+
+	@Override
+	public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+		WsSessions.Client client = WsSessions.client(session);
+		if (sessions.remove(session) && !client.isCar()) {
+			vehicles.sendPassengersUpdate(client.vehicleId());
+		}
+	}
+
+	/** 4-1 */
+	private void auth(WebSocketSession session, String type, Map<?, ?> data) {
+		WsSessions.Client client;
+		try {
+			if (!"auth".equals(type) || !(data.get("token") instanceof String token)) {
+				throw new IllegalArgumentException();
+			}
+			client = vehicles.select_wsClient(token);
+		} catch (ApiException | IllegalArgumentException e) {
+			WsSessions.close(session, WsSessions.AUTH_FAILED);
+			return;
+		}
+		sessions.add(session, client);
+		if (!session.isOpen()) { // 인증 중에 5초가 지나 닫힘
+			sessions.remove(session);
+			return;
+		}
+
+		Map<String, Object> ok = new LinkedHashMap<>();
+		ok.put("role", client.isCar() ? "CAR" : "PASSENGER");
+		if (!client.isCar()) {
+			ok.put("me", Map.of("passengerId", client.passengerId(), "nickname", client.nickname()));
+		}
+		ok.put("trip", trips.select_activeTrip(client.vehicleId()));
+		ok.put("openCall", null); // shortcut: 출발해요(A2) 구현 때 열린 출발 알림을 넣는다
+		sessions.send(session, "auth.ok", null, ok);
+
+		if (client.isCar()) {
+			trips.save_carActivity(client.vehicleId());
+		} else {
+			// shortcut: 동승자에게 auth.ok 뒤 보낼 route.update·trip.state는 위치·경로 메시지(5-3, 5-4) 구현 때 추가
+			trips.save_tripPassenger(client.vehicleId(), client.passengerId());
+			vehicles.sendPassengersUpdate(client.vehicleId());
+		}
+	}
+
+	/** 5-1 */
+	private void tripStart(WebSocketSession session, long vehicleId, String reqId, Map<?, ?> data) {
+		if (!Boolean.TRUE.equals(data.get("locationConsent"))) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "CONSENT_REQUIRED", "위치 공유에 동의해야 연결돼요");
+		}
+		TripService.TripInfo trip = trips.save_tripStart(vehicleId);
+		for (long passengerId : sessions.onlinePassengerIds(vehicleId)) {
+			trips.save_tripPassenger(vehicleId, passengerId);
+		}
+		ack(session, reqId, Map.of("tripId", trip.tripId()));
+		sessions.sendToPassengers(vehicleId, "trip.started", trip);
+	}
+
+	/** 5-2 */
+	private void tripEnd(WebSocketSession session, long vehicleId, String reqId) {
+		if (trips.save_tripEnd(vehicleId)) {
+			sessions.sendToPassengers(vehicleId, "trip.ended", Map.of("reason", "ENDED"));
+		}
+		ack(session, reqId, Map.of());
+	}
+
+	private void expireTrips() {
+		try {
+			for (long vehicleId : trips.save_expiredTrips()) {
+				sessions.sendToPassengers(vehicleId, "trip.ended", Map.of("reason", "EXPIRED"));
+			}
+		} catch (RuntimeException e) { // 던지면 다음 확인이 멈춘다
+			log.warn("trip expire failed", e);
+		}
+	}
+
+	private void ack(WebSocketSession session, String reqId, Object data) {
+		if (reqId != null) {
+			sessions.send(session, "ack", reqId, data);
+		}
+	}
+
+	private static long requireCar(WsSessions.Client client) {
+		if (!client.isCar()) {
+			throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN_ROLE", "이 기능을 쓸 수 없어요");
+		}
+		return client.vehicleId();
+	}
+
+	private Map<?, ?> parse(String payload) {
+		try {
+			return json.readValue(payload, Map.class) instanceof Map<?, ?> m ? m : Map.of();
+		} catch (JacksonException e) {
+			return Map.of();
+		}
+	}
+}

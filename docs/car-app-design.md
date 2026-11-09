@@ -299,8 +299,8 @@ classDiagram
 └──────────────────────────┘
 ```
 
-- 열 때 `POST /connect-codes {"kind": "QR"}`. 만료 2분이 지나면 자동으로 새로 받습니다 (화면이 열려 있는 동안만).
-- 동승자가 연결되면(`passengers.update`) 아래 줄에 이름이 늘고, **코드를 새로 받아** 다음 사람이 찍을 수 있게 합니다 (일회용).
+- 열 때 `POST /connect-codes {"kind": "QR"}`. 만료 3분이 지나면 자동으로 새로 받습니다 (화면이 열려 있는 동안만).
+- **QR 하나로 여러 명이 연결**합니다. 동승자가 연결되면(`passengers.update`) 아래 줄에 이름만 늘고 QR은 그대로 둡니다. 4명이 차면 QR을 숨깁니다.
 - 4명이면(`PASSENGER_LIMIT`) QR 대신 "동승자는 4명까지예요. 설정에서 해제할 수 있어요".
 - 기어가 D가 되면 바로 닫습니다.
 
@@ -517,7 +517,7 @@ sequenceDiagram
     A->>S: POST /connect-codes {kind: QR}
     alt 성공
         S-->>A: 201 {url, expiresAt}
-        A->>A: ZXing으로 QR 그리기, 2분 타이머
+        A->>A: ZXing으로 QR 그리기, 3분 타이머
     else 4명 다 참
         S-->>A: 409 PASSENGER_LIMIT
         A->>D: "동승자는 4명까지예요"
@@ -526,9 +526,8 @@ sequenceDiagram
     P->>S: POST /connect {code, nickname, locationConsent}
     S-->>P: {passengerToken}
     P->>S: WS auth {passengerToken}
-    S-->>A: passengers.update
-    A->>S: POST /connect-codes (다음 사람용 새 코드)
-    Note over A: 2분이 지나면 화면이 열려 있는 동안 자동으로 새 코드.<br/>기어 D가 되면 QR 화면을 닫음
+    S-->>A: passengers.update (이름 추가, QR은 그대로)
+    Note over A: 같은 QR로 다음 사람도 연결. 3분이 지나면 화면이 열려 있는 동안 자동으로 새 코드.<br/>4명이 차면 QR을 숨김. 기어 D가 되면 QR 화면을 닫음
 ```
 
 ### 6-4. 경유지 요청 처리
@@ -889,7 +888,7 @@ app-api.md 9장 값을 따르고, 차량 앱에만 있는 값을 더했습니다
 | 수락 대기 | 10초 |
 | 출발해요 다시 알리기 | 1분 |
 | 메시지 | 40자 |
-| QR | 2분마다 새로, 동승자 최대 4명 |
+| QR | 3분마다 새로 (그동안 여러 명), 동승자 최대 4명 |
 | ping | 20초 |
 | 재접속 | 1·2·4 … 최대 30초 |
 | 실패 문구 표시 | 3초 |
