@@ -405,6 +405,17 @@ class WsTest {
 	}
 
 	@Test
+	void 서버가_경로를_아직_못_받았어도_DB에_목적지가_있으면_경유지로_넣는다() throws Exception {
+		kakaoFinds();
+		Client[] c = carAndPhone();
+		// 서버를 다시 켠 직후: 메모리에는 경로가 없고 trip 행에만 목적지가 남아 있음
+		jdbc.update("UPDATE trip SET dest_name = '부산역', dest_lat = 35.1, dest_lng = 129.0 WHERE vehicle_id = ?",
+				vehicleIds.get(0));
+		c[1].send(PROPOSE);
+		assertEquals("ADD", c[0].next("waypoint.request").get("action"));
+	}
+
+	@Test
 	void 새_제안이_오면_이전_것은_만료되고_늦은_수락은_REQUEST_EXPIRED() throws Exception {
 		kakaoFinds();
 		Client[] c = carAndPhone();
@@ -423,8 +434,8 @@ class WsTest {
 		c[0].send("{\"type\":\"waypoint.accept\",\"reqId\":\"a\",\"data\":{\"requestId\":" + first + "}}");
 		assertEquals("REQUEST_EXPIRED", c[0].next("error").get("code"));
 
-		// 10초가 지난 요청도 받지 않는다
-		jdbc.update("UPDATE waypoint_request SET requested_at = requested_at - INTERVAL 11 SECOND WHERE id = ?", second);
+		// 마감(자동 수락 10초 + 여유 5초)이 지난 요청도 받지 않는다
+		jdbc.update("UPDATE waypoint_request SET requested_at = requested_at - INTERVAL 16 SECOND WHERE id = ?", second);
 		c[0].send("{\"type\":\"waypoint.accept\",\"reqId\":\"b\",\"data\":{\"requestId\":" + second + "}}");
 		assertEquals("REQUEST_EXPIRED", c[0].next("error").get("code"));
 

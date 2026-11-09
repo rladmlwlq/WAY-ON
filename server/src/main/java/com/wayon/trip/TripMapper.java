@@ -50,6 +50,9 @@ public interface TripMapper {
 
 	TripRows.Request select_request(@Param("requestId") long requestId);
 
+	/** 차가 마지막으로 보낸 목적지 이름 (5-4). 없으면 null */
+	String select_destName(@Param("tripId") long tripId);
+
 	/** ACTIVE 세션이 없거나 위치를 아직 못 받았으면 null */
 	TripRows.CarPosition select_carPosition(@Param("vehicleId") long vehicleId);
 

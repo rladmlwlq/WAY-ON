@@ -445,7 +445,8 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 {"type": "waypoint.reject", "data": {"requestId": 88}}
 ```
 - **처리 순서 (D7): 서버 선점 → 내비 호출 → 결과 기록.** 차량 앱은 `waypoint.accept`에 대한 `ack`를 받은 뒤에만 `addWaypoint`·`requestRoute`를 부릅니다. `error {"code": "REQUEST_EXPIRED"}`가 오면 부르지 않습니다.
-- 10초 안에 아무것도 안 보내면 서버가 `EXPIRED`로 바꾸고 차량 앱에 `waypoint.expired`를 보냅니다.
+- ~~10초 안에 아무것도 안 보내면 서버가 `EXPIRED`로 바꾸고 차량 앱에 `waypoint.expired`를 보냅니다.~~
+- **바뀜 (2026-11-09): 그대로 두면 자동 수락.** 운전자가 10초 동안 아무것도 누르지 않으면 차량 앱이 스스로 `waypoint.accept`를 보냅니다 (운전 중 화면을 누르지 않아도 되게, 원치 않을 때만 [거절]). 서버 마감은 네트워크 지연을 감안해 **15초**이고, 그때까지 수락이 안 오면(차량 앱이 꺼짐 등) `EXPIRED` + `waypoint.expired`.
 
 ### 5-11. `waypoint.result` — 내비 반영 결과
 
@@ -549,6 +550,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
   "expiresAt": "2026-11-05T08:20:10.000Z"}}
 ```
 - `place.extId`도 붙습니다 (2026-11-09 추가). 차량 앱이 `myWaypoints`에 저장해 휴게소 도착 카드에 씁니다
+- `expiresAt`은 자동 수락 시각 (요청 + 10초). 서버 마감은 그보다 5초 뒤 (5-10)
 - `action`은 `ADD` | `SET_DEST`. `SET_DEST`면 차 화면에 "목적지를 ○○로 바꿀까요?"
 - 주행 중에도 보냅니다. 수락 화면은 DO 화면으로 짧게 (way-on.md 3.5).
 

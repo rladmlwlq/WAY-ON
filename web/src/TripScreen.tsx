@@ -119,7 +119,8 @@ function requestText(s: WaypointStatus) {
   const where = s.action === 'SET_DEST' ? '목적지' : '경유지'
   switch (s.status) {
     case 'PENDING':
-      return '운전자가 확인하고 있어요'
+      // 차 화면은 그대로 두면 10초 뒤 자동으로 수락한다 (운전자는 원치 않을 때만 거절)
+      return `운전자가 확인하고 있어요. 거절하지 않으면 10초 뒤 자동으로 ${where}로 추가돼요`
     case 'ACCEPTED':
       return `운전자가 수락했어요. 내비에 ${where}로 넣는 중`
     case 'APPLIED':
@@ -127,7 +128,8 @@ function requestText(s: WaypointStatus) {
     case 'REJECTED':
       return '운전자가 이번엔 넘겼어요'
     case 'EXPIRED':
-      return '응답이 없어서 취소됐어요'
+      // 자동 수락이 있어서 차량 앱이 꺼져 있거나, 다른 제안이 와서 밀렸을 때만
+      return '차가 응답하지 않았거나 새 제안으로 바뀌어 취소됐어요'
     case 'FAILED':
       return s.failReason ?? '내비에 넣지 못했어요'
   }

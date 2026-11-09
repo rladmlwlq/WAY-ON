@@ -195,17 +195,20 @@ public class TripLiveService {
 		return out;
 	}
 
-	/** 차가 마지막으로 보낸 경로 구성 (6-1 action·WAYPOINT_FULL 판단). 아직 못 받았으면 목적지 없음·경유지 0 */
-	public record RouteShape(boolean hasDestination, int waypoints) {
+	/**
+	 * 차가 마지막으로 보낸 경로 구성 (6-1 action·WAYPOINT_FULL 판단).
+	 * known=false면 이 서버가 아직 car.route를 못 받은 것 (서버 재시작 직후 등). 부르는 쪽이 DB 목적지로 보완한다
+	 */
+	public record RouteShape(boolean known, boolean hasDestination, int waypoints) {
 	}
 
 	public RouteShape select_routeShape(long vehicleId) {
 		Live l = live.get(vehicleId);
 		if (l == null) {
-			return new RouteShape(false, 0);
+			return new RouteShape(false, false, 0);
 		}
 		synchronized (l) {
-			return new RouteShape(l.dest != null, l.waypoints == null ? 0 : l.waypoints.size());
+			return new RouteShape(l.routeKey != null, l.dest != null, l.waypoints == null ? 0 : l.waypoints.size());
 		}
 	}
 

@@ -30,14 +30,18 @@ import jakarta.annotation.PreDestroy;
 
 /**
  * 경유지 요청 (F3, app-api.md 6-1, 5-10, 5-11, 7-2, car-app-design.md 6-4).
- * 폰 제안 → 서버가 장소를 다시 찾아 저장 → 차 수락 화면(10초) → 서버 선점 → 내비 반영 결과. 상태가 바뀔 때마다 폰들에 waypoint.status.
+ * 폰 제안 → 서버가 장소를 다시 찾아 저장 → 차 수락 화면(그대로 두면 10초 뒤 자동 수락) → 서버 선점 → 내비 반영 결과.
+ * 상태가 바뀔 때마다 폰들에 waypoint.status.
  * 한 세션에 PENDING은 1건: 새 제안이 오면 이전 것을 EXPIRED로 (마지막 요청 우선)
  */
 @Service
 public class WaypointService {
 
 	private static final Logger log = LoggerFactory.getLogger(WaypointService.class);
-	static final Duration ACCEPT_WINDOW = Duration.ofSeconds(10);
+	/** 차 화면이 이만큼 지나면 자동으로 수락한다 (그대로 두면 추가, 2026-11-09 결정). 7-2 expiresAt */
+	static final Duration AUTO_ACCEPT = Duration.ofSeconds(10);
+	/** 서버 마감. 자동 수락이 네트워크로 늦게 와도 받게 5초 여유. 차가 꺼져 있으면 이 뒤 EXPIRED */
+	static final Duration ACCEPT_WINDOW = Duration.ofSeconds(15);
 	private static final int MAX_WAYPOINTS = 2;
 
 	private final TripMapper mapper;
@@ -73,7 +77,9 @@ public class WaypointService {
 		}
 		Place place = resolve(data.get("place") instanceof Map<?, ?> m ? m : Map.of());
 		TripLiveService.RouteShape route = live.select_routeShape(vehicleId);
-		String action = !route.hasDestination() || "PARKING".equals(place.type()) ? "SET_DEST" : "ADD";
+		// 서버를 막 다시 켜서 경로를 아직 못 받았으면 DB 목적지로 본다. 목적지가 있는데 SET_DEST로 바꿔 버리지 않게
+		boolean hasDestination = route.known() ? route.hasDestination() : mapper.select_destName(trip.id()) != null;
+		String action = !hasDestination || "PARKING".equals(place.type()) ? "SET_DEST" : "ADD";
 		if ("ADD".equals(action) && route.waypoints() >= MAX_WAYPOINTS) {
 			throw new ApiException(HttpStatus.CONFLICT, "WAYPOINT_FULL", "경유지가 가득 찼어요");
 		}
@@ -112,14 +118,14 @@ public class WaypointService {
 		toCar.put("requestedBy", request.requestedBy());
 		toCar.put("place", placeOut);
 		toCar.put("action", action);
-		toCar.put("expiresAt", now.plus(ACCEPT_WINDOW).toInstant(ZoneOffset.UTC).toString());
+		toCar.put("expiresAt", now.plus(AUTO_ACCEPT).toInstant(ZoneOffset.UTC).toString());
 		sessions.sendToCar(vehicleId, "waypoint.request", toCar);
 		sendStatus(requestId);
 		timer.schedule(() -> expire(vehicleId, requestId), ACCEPT_WINDOW.toMillis(), TimeUnit.MILLISECONDS);
 		return Map.of("requestId", requestId);
 	}
 
-	/** 5-10 [추가]. 10초가 지났거나 밀린 요청이면 REQUEST_EXPIRED (차량 앱은 내비를 부르지 않음) */
+	/** 5-10 [추가] 또는 10초 자동 수락. 15초가 지났거나 밀린 요청이면 REQUEST_EXPIRED (차량 앱은 내비를 부르지 않음) */
 	public void save_accept(long vehicleId, Map<?, ?> data) {
 		long id = requestId(data);
 		LocalDateTime now = now();

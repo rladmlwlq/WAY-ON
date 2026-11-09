@@ -290,7 +290,8 @@ class WayOnService : LifecycleService() {
 
     /**
      * 수락 화면을 띄운다. 떠 있으면 새 요청으로 바꾸고 10초를 다시 센다 (서버가 이전 것을 EXPIRED로 바꿈).
-     * 마감은 서버 expiresAt 대신 받은 때부터 10초로 센다 (기기·서버 시각이 어긋나도 10초 보이게). 서버가 진짜 마감을 지킨다
+     * **그대로 두면 10초 뒤 자동으로 수락한다** (2026-11-09 결정: 운전 중 화면을 누르지 않아도 되게, [거절]만 누르면 됨).
+     * 마감은 서버 expiresAt 대신 받은 때부터 10초로 센다 (기기·서버 시각이 어긋나도 10초 보이게). 서버는 5초 여유를 둔다
      */
     private fun showRequest(request: WaypointRequest) {
         val current = serverUi.value.request
@@ -300,11 +301,11 @@ class WayOnService : LifecycleService() {
         serverUi.update { it.copy(request = RequestUi(request, expiresAt)) }
         requestJob = lifecycleScope.launch {
             delay(Config.ACCEPT_TIMEOUT_MS)
-            closeRequestIfWaiting()
+            acceptRequest()
         }
     }
 
-    /** 수락 화면 [추가]. 서버 선점(ack)을 기다리는 동안 버튼을 잠근다 */
+    /** 수락 화면 [추가] 또는 10초 자동 수락. 서버 선점(ack)을 기다리는 동안 버튼을 잠근다 */
     fun acceptRequest() {
         val ui = serverUi.value.request ?: return
         if (ui.phase != RequestUi.Phase.SHOWING) return

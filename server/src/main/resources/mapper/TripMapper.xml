@@ -93,6 +93,10 @@
 		WHERE wr.id = #{requestId}
 	</select>
 
+	<select id="select_destName" resultType="string">
+		SELECT dest_name FROM trip WHERE id = #{tripId}
+	</select>
+
 	<select id="select_restAreaRequestExtId" resultType="string">
 		SELECT wr.place_ext_id
 		FROM waypoint_request wr

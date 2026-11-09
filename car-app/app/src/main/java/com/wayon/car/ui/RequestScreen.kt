@@ -36,6 +36,7 @@ import kotlinx.coroutines.delay
 /**
  * 요청 수락 (car-app-design.md 4-3). waypoint.request가 오면 어느 화면이든 그 위에 띄운다.
  * 주행 중에도 뜨는 유일한 화면이라 글자는 크게, 버튼은 홈과 같은 크기로, 문장은 짧게.
+ * 그대로 두면 10초 뒤 자동으로 추가된다 (운전자는 원치 않을 때만 [거절]).
  */
 @Composable
 fun RequestScreen(ui: RequestUi, onAccept: () -> Unit, onReject: () -> Unit) {
@@ -73,7 +74,7 @@ fun RequestScreen(ui: RequestUi, onAccept: () -> Unit, onReject: () -> Unit) {
 
             when (ui.phase) {
                 RequestUi.Phase.SHOWING, RequestUi.Phase.CLAIMING -> {
-                    Countdown(ui.expiresAtMs)
+                    Countdown(ui.expiresAtMs, if (r.action == "SET_DEST") "목적지를 바꿔요" else "경유지를 추가해요")
                     val locked = ui.phase == RequestUi.Phase.CLAIMING
                     Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                         // 거절은 덜 눈에 띄게 좁게, 높이는 [추가]와 같게
@@ -92,9 +93,9 @@ fun RequestScreen(ui: RequestUi, onAccept: () -> Unit, onReject: () -> Unit) {
     }
 }
 
-/** 남은 시간 막대와 "7초". 0이 되면 서비스가 닫는다 */
+/** 남은 시간 막대와 "그대로 두면 7초 뒤 자동으로 경유지를 추가해요". 0이 되면 서비스가 자동 수락한다 */
 @Composable
-private fun Countdown(expiresAtMs: Long) {
+private fun Countdown(expiresAtMs: Long, autoAction: String) {
     val now by produceState(System.currentTimeMillis(), expiresAtMs) {
         while (true) {
             value = System.currentTimeMillis()
@@ -102,14 +103,18 @@ private fun Countdown(expiresAtMs: Long) {
         }
     }
     val leftMs = (expiresAtMs - now).coerceAtLeast(0)
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        LinearProgressIndicator(
-            progress = { leftMs.toFloat() / Config.ACCEPT_TIMEOUT_MS },
-            modifier = Modifier.widthIn(min = 400.dp).height(12.dp),
-            color = Blue,
-        )
-        Text("${(leftMs + 999) / 1000}초", fontSize = 36.sp, color = Navy, fontWeight = FontWeight.Bold)
-    }
+    LinearProgressIndicator(
+        progress = { leftMs.toFloat() / Config.ACCEPT_TIMEOUT_MS },
+        modifier = Modifier.widthIn(min = 600.dp).height(12.dp),
+        color = Blue,
+    )
+    FitText(
+        "그대로 두면 ${(leftMs + 999) / 1000}초 뒤 자동으로 $autoAction",
+        36.sp,
+        color = Blue,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center,
+    )
 }
 
 private fun typeLabel(type: String) = when (type) {
