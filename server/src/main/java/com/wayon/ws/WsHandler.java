@@ -19,15 +19,18 @@ import com.wayon.common.ApiException;
 import com.wayon.departure.DepartureService;
 import com.wayon.restarea.RestAreaDto;
 import com.wayon.restarea.RestAreaService;
+import com.wayon.trip.TripLiveService;
 import com.wayon.trip.TripService;
 import com.wayon.vehicle.VehicleService;
+import com.wayon.waypoint.WaypointService;
 
 import jakarta.annotation.PreDestroy;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * /ws (app-api.md 4장): 첫 메시지 인증, ping, 세션 시작·끝, 5분 무통신 만료, 휴게소 접근·도착·떠남(5-9),
+ * /ws (app-api.md 4장): 첫 메시지 인증, ping, 세션 시작·끝, 5분 무통신 만료, 차 위치·경로·에너지·기어(5-3~5-6),
+ * 경유지 요청·수락·결과(6-1, 5-10, 5-11), 휴게소 접근·도착·떠남(5-9),
  * 출발해요(5-12, 6-2: departure.call·remind·close·message, 30분 만료, 30일 지난 대화 삭제).
  * 세션이 끝나도 동승자 연결은 닫지 않고 trip.ended만 보낸다 (4-3의 4410은 쓰지 않음, 9장 정하지 않은 것)
  */
@@ -43,16 +46,20 @@ public class WsHandler extends TextWebSocketHandler {
 	private final TripService trips;
 	private final RestAreaService restAreas;
 	private final DepartureService departures;
+	private final TripLiveService live;
+	private final WaypointService waypoints;
 	private final JsonMapper json;
 	private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor();
 
 	public WsHandler(WsSessions sessions, VehicleService vehicles, TripService trips, RestAreaService restAreas,
-			DepartureService departures, JsonMapper json) {
+			DepartureService departures, TripLiveService live, WaypointService waypoints, JsonMapper json) {
 		this.sessions = sessions;
 		this.vehicles = vehicles;
 		this.trips = trips;
 		this.restAreas = restAreas;
 		this.departures = departures;
+		this.live = live;
+		this.waypoints = waypoints;
 		this.json = json;
 		timer.scheduleWithFixedDelay(this::expireTrips, EXPIRE_CHECK_S, EXPIRE_CHECK_S, TimeUnit.SECONDS);
 		timer.scheduleWithFixedDelay(this::deleteOldMessages, 1, 24 * 60, TimeUnit.MINUTES);
@@ -93,6 +100,18 @@ public class WsHandler extends TextWebSocketHandler {
 				case "ping" -> sessions.send(session, "pong", null, null);
 				case "trip.start" -> tripStart(session, requireCar(client), reqId, data);
 				case "trip.end" -> tripEnd(session, requireCar(client), reqId);
+				case "car.location" -> live.save_location(requireCar(client), data);
+				case "car.route" -> live.save_route(requireCar(client), data);
+				case "car.energy" -> live.save_energy(requireCar(client), data);
+				case "car.gear" -> live.save_gear(requireCar(client), data);
+				case "waypoint.propose" -> ack(session, reqId,
+						waypoints.save_propose(client.vehicleId(), requirePassenger(client), data));
+				case "waypoint.accept" -> {
+					waypoints.save_accept(requireCar(client), data);
+					ack(session, reqId, Map.of());
+				}
+				case "waypoint.reject" -> waypoints.save_reject(requireCar(client), data);
+				case "waypoint.result" -> waypoints.save_result(requireCar(client), data);
 				case "restarea.approach" -> restArea(session, requireCar(client), reqId, data, RestAreaDto.Phase.APPROACH);
 				case "restarea.arrived" -> restArea(session, requireCar(client), reqId, data, RestAreaDto.Phase.ARRIVED);
 				case "restarea.left" -> restArea(session, requireCar(client), reqId, data, RestAreaDto.Phase.LEFT);
@@ -165,9 +184,10 @@ public class WsHandler extends TextWebSocketHandler {
 		if (client.isCar()) {
 			trips.save_carActivity(client.vehicleId());
 		} else {
-			// shortcut: 동승자에게 auth.ok 뒤 보낼 route.update·trip.state는 위치·경로 메시지(5-3, 5-4) 구현 때 추가
 			trips.save_tripPassenger(client.vehicleId(), client.passengerId());
 			vehicles.sendPassengersUpdate(client.vehicleId());
+			// 4-1: 지도를 바로 그리게 마지막 경로·차 위치를 한 번
+			live.select_snapshot(client.vehicleId()).forEach((t, d) -> sessions.send(session, t, null, d));
 		}
 	}
 
@@ -187,6 +207,7 @@ public class WsHandler extends TextWebSocketHandler {
 	/** 5-2 */
 	private void tripEnd(WebSocketSession session, long vehicleId, String reqId) {
 		if (trips.save_tripEnd(vehicleId)) {
+			live.clear(vehicleId);
 			sessions.sendToPassengers(vehicleId, "trip.ended", Map.of("reason", "ENDED"));
 		}
 		ack(session, reqId, Map.of());
@@ -209,6 +230,7 @@ public class WsHandler extends TextWebSocketHandler {
 	private void expireTrips() {
 		try {
 			for (long vehicleId : trips.save_expiredTrips()) {
+				live.clear(vehicleId);
 				sessions.sendToPassengers(vehicleId, "trip.ended", Map.of("reason", "EXPIRED"));
 			}
 		} catch (RuntimeException e) { // 던지면 다음 확인이 멈춘다
@@ -243,6 +265,13 @@ public class WsHandler extends TextWebSocketHandler {
 			throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "요청 형식이 맞지 않아요");
 		}
 		return id.longValue();
+	}
+
+	private static long requirePassenger(WsSessions.Client client) {
+		if (client.isCar()) {
+			throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN_ROLE", "이 기능을 쓸 수 없어요");
+		}
+		return client.passengerId();
 	}
 
 	private static long requireCar(WsSessions.Client client) {

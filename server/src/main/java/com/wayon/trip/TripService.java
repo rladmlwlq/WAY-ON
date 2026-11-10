@@ -94,6 +94,11 @@ public class TripService {
 		return extId;
 	}
 
+	/** 검색 중심점. ACTIVE 세션의 마지막 차 위치, 없으면 null */
+	public TripRows.CarPosition select_carPosition(long vehicleId) {
+		return mapper.select_carPosition(vehicleId);
+	}
+
 	private LocalDateTime now() {
 		return LocalDateTime.now(clock).truncatedTo(ChronoUnit.MILLIS);
 	}

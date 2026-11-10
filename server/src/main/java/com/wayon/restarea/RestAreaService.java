@@ -271,6 +271,24 @@ public class RestAreaService {
 		return result;
 	}
 
+	/** 휴게소 하나의 이름·좌표 (경유지 요청 6-1). 없는 코드면 null */
+	public RestAreaDto.Location location(String code) {
+		RestAreaRows.RestArea r = isCode(code) ? mapper.findByCode(code) : null;
+		return r == null ? null
+				: new RestAreaDto.Location(r.stdRestCd(), r.name(), r.routeName(), r.directionLabel(),
+						r.lat().doubleValue(), r.lng().doubleValue(), r.travelBearing());
+	}
+
+	/** 카카오 장소 ID → 그 매장이 있는 휴게소 코드. 휴게소 안 매장이 아니면 빠짐 */
+	public Map<String, String> restAreaCodesByKakaoId(Collection<String> kakaoIds) {
+		if (kakaoIds.isEmpty()) {
+			return Map.of();
+		}
+		return mapper.findByKakaoIds(kakaoIds).stream()
+				.collect(Collectors.toMap(RestAreaRows.KakaoMatch::kakaoId, RestAreaRows.KakaoMatch::stdRestCd,
+						(a, b) -> a));
+	}
+
 	/** `ra:000001` → "000001". 형식이 다르면 비어 있음 */
 	public static Optional<String> parseExtId(String extId) {
 		if (extId == null || !extId.startsWith(EXT_ID_PREFIX)) {

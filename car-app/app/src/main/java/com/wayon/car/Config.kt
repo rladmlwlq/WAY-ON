@@ -15,6 +15,7 @@ object Config {
     const val PARKING_NEAR_TIME_S = 300              //   또는 5분
 
     const val ACCEPT_TIMEOUT_MS = 10_000L            // 수락 대기
+    const val APPLY_TIMEOUT_MS = 60_000L             // 내비 반영 성공 콜백 대기 (6-4)
     const val REMIND_INTERVAL_MS = 60_000L           // 출발해요 다시 알리기
     const val MESSAGE_MAX_LEN = 40                   // 출발해요 메시지
     const val MAX_PASSENGERS = 4

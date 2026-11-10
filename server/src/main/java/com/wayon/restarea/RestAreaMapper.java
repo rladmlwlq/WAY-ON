@@ -28,4 +28,7 @@ public interface RestAreaMapper {
 
 	/** 식당가 메뉴 (0502) */
 	List<RestAreaRows.Menu> findMenus(@Param("code") String code);
+
+	/** 카카오 장소 ID 중 휴게소 안 매장인 것 (rest_area_place) */
+	List<RestAreaRows.KakaoMatch> findByKakaoIds(@Param("codes") Collection<String> kakaoIds);
 }

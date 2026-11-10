@@ -38,6 +38,17 @@ class ServerMessageTest {
     }
 
     @Test
+    fun `waypoint request를 읽고 action이 틀리면 버린다`() {
+        val data = """{"requestId":88,"requestedBy":"민지","action":"ADD","expiresAt":"2026-11-09T08:20:10Z",
+            "place":{"type":"REST_AREA","extId":"ra:000048","name":"경산휴게소","address":null,"lat":35.86,"lng":128.8}}"""
+        val r = message("waypoint.request", data).waypointRequest()
+        assertEquals(WaypointRequest(88, "민지", "REST_AREA", "ra:000048", "경산휴게소", null, 35.86, 128.8, "ADD",
+            "2026-11-09T08:20:10Z"), r)
+        assertNull(message("waypoint.request", data.replace("\"ADD\"", "\"DELETE\"")).waypointRequest())
+        assertEquals(88L, message("waypoint.expired", """{"requestId":88}""").requestId())
+    }
+
+    @Test
     fun `재접속 간격은 2배씩 최대 30초`() {
         assertEquals(2_000L, ServerClient.nextRetryMs(1_000))
         assertEquals(30_000L, ServerClient.nextRetryMs(16_000))

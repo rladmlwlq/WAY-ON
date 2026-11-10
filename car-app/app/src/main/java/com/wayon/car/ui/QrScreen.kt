@@ -55,15 +55,17 @@ import kotlinx.coroutines.delay
  * QR 하나로 만료(3분)까지 여러 명이 찍는다. 4명이 차면 QR 대신 안내.
  */
 @Composable
-fun QrScreen(state: AppState, onBack: () -> Unit, onRenew: () -> Unit, modifier: Modifier = Modifier) {
+fun QrScreen(
+    state: AppState,
+    onBack: () -> Unit,
+    onRenew: () -> Unit,
+    onManage: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val qr = state.server.qr ?: return
     val passengers = state.server.passengers
 
     Box(modifier.fillMaxSize().background(Brush.verticalGradient(listOf(BgTop, BgBottom)))) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(16.dp)) {
-            Text("← 돌아가기", style = MaterialTheme.typography.titleLarge, color = Navy)
-        }
-
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -94,8 +96,10 @@ fun QrScreen(state: AppState, onBack: () -> Unit, onRenew: () -> Unit, modifier:
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 when {
-                    state.server.passengersFull ->
-                        Message("동승자는 ${Config.MAX_PASSENGERS}명까지예요.\n설정에서 해제할 수 있어요")
+                    state.server.passengersFull -> {
+                        Message("동승자는 ${Config.MAX_PASSENGERS}명까지예요.\n한 명을 해제하면 QR이 다시 보여요")
+                        Button(onClick = onManage) { Text("동승자 관리", style = MaterialTheme.typography.titleMedium) }
+                    }
                     qr.error != null -> {
                         Message(qr.error)
                         Button(onClick = onRenew) { Text("다시 시도", style = MaterialTheme.typography.titleMedium) }
@@ -119,14 +123,26 @@ fun QrScreen(state: AppState, onBack: () -> Unit, onRenew: () -> Unit, modifier:
                 color = if (passengers.isEmpty()) Gray else Navy,
             )
         }
+
+        // 화면 전체를 덮는 스크롤 본문보다 뒤에 둬야 위에 그려지고 눌린다
+        BackButton(onBack)
     }
 }
 
-private val Navy = Color(0xFF14213D)
-private val Blue = Color(0xFF2B6CF6)
-private val Gray = Color(0xFF6B7280)
-private val BgTop = Color(0xFFF7F9FC)
-private val BgBottom = Color(0xFFEAF0FB)
+/** 왼쪽 위 [← 돌아가기] (QR·동승자 관리 공통) */
+@Composable
+internal fun BackButton(onBack: () -> Unit) {
+    TextButton(onClick = onBack, modifier = Modifier.padding(16.dp)) {
+        Text("← 돌아가기", style = MaterialTheme.typography.titleLarge, color = Navy)
+    }
+}
+
+// 동승자 화면(QR·동승자 관리)과 폰 웹(index.css)이 같은 색을 쓴다
+internal val Navy = Color(0xFF14213D)
+internal val Blue = Color(0xFF2B6CF6)
+internal val Gray = Color(0xFF6B7280)
+internal val BgTop = Color(0xFFF7F9FC)
+internal val BgBottom = Color(0xFFEAF0FB)
 
 @Composable
 private fun Message(text: String) {

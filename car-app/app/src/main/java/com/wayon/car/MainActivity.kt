@@ -21,9 +21,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -31,7 +33,12 @@ import androidx.core.content.ContextCompat
 import com.wayon.car.service.AppState
 import com.wayon.car.service.WayOnService
 import com.wayon.car.ui.DepartureScreen
+import androidx.compose.material3.lightColorScheme
+import com.wayon.car.ui.Blue
 import com.wayon.car.ui.HomeScreen
+import com.wayon.car.ui.PassengersScreen
+import com.wayon.car.ui.RequestScreen
+import androidx.compose.foundation.layout.Box
 import com.wayon.car.ui.QrScreen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -73,30 +80,50 @@ class MainActivity : ComponentActivity() {
         startForegroundService(Intent(this, WayOnService::class.java))
 
         setContent {
-            MaterialTheme {
+            // 버튼 기본색(보라)을 동승자 화면·폰 웹과 같은 파랑으로
+            MaterialTheme(colorScheme = lightColorScheme(primary = Blue)) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val state by stateSource.value.collectAsState()
-                    Column {
-                        // 모든 화면 위 오프라인 띠 (4장, 7-2)
-                        if (!state.server.online) OfflineBar()
-                        val departure = state.server.departure
-                        when {
-                            state.server.qr != null && state.parked ->
-                                QrScreen(state, onBack = { service?.closeQr() }, onRenew = { service?.openQr() })
-                            // 출발해요 대화는 정차 중에만 (기어 D면 서비스가 닫는다, 4-5)
-                            departure != null && state.parked -> DepartureScreen(
-                                departure,
-                                onQuick = { service?.sendDepartureQuick(it) },
-                                onText = { service?.sendDepartureText(it) },
-                                onRemind = { service?.remindDeparture() },
-                                onCancel = { service?.cancelDeparture() },
-                            )
-                            else -> HomeScreen(
-                                state,
-                                onOpenQr = { service?.openQr() },
-                                onConsent = { service?.giveLocationConsent() },
-                                onDeparture = { service?.callDeparture() },
-                            )
+                    // 동승자 관리는 화면에서만 여닫는다. 정차 중에만 보이고, QR처럼 주행하면 닫는다 (4-6)
+                    var managing by remember { mutableStateOf(false) }
+                    LaunchedEffect(state.parked) { if (!state.parked) managing = false }
+                    Box {
+                        Column {
+                            // 모든 화면 위 오프라인 띠 (4장, 7-2)
+                            if (!state.server.online) OfflineBar()
+                            val departure = state.server.departure
+                            when {
+                                managing && state.parked -> PassengersScreen(
+                                    state.server.passengers,
+                                    onBack = { managing = false },
+                                    onRemove = { service?.removePassenger(it) },
+                                )
+                                state.server.qr != null && state.parked -> QrScreen(
+                                    state,
+                                    onBack = { service?.closeQr() },
+                                    onRenew = { service?.openQr() },
+                                    onManage = { managing = true },
+                                )
+                                // 출발해요 대화는 정차 중에만 (기어 D면 서비스가 닫는다, 4-5)
+                                departure != null && state.parked -> DepartureScreen(
+                                    departure,
+                                    onQuick = { service?.sendDepartureQuick(it) },
+                                    onText = { service?.sendDepartureText(it) },
+                                    onRemind = { service?.remindDeparture() },
+                                    onCancel = { service?.cancelDeparture() },
+                                )
+                                else -> HomeScreen(
+                                    state,
+                                    onOpenQr = { service?.openQr() },
+                                    onConsent = { service?.giveLocationConsent() },
+                                    onDeparture = { service?.callDeparture() },
+                                    onManage = { managing = true },
+                                )
+                            }
+                        }
+                        // 경유지 요청 수락 (4-3): 어느 화면이든 그 위에, 주행 중에도
+                        state.server.request?.let {
+                            RequestScreen(it, onAccept = { service?.acceptRequest() }, onReject = { service?.rejectRequest() })
                         }
                     }
                 }
