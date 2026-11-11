@@ -3,6 +3,8 @@ package com.wayon.car.server
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import com.wayon.car.car.DemoRoute
+import com.wayon.car.car.Place
 
 /** 세션 (auth.ok의 trip, trip.start의 ack). app-api.md 4-1, 5-1 */
 data class Trip(val tripId: String)
@@ -99,6 +101,27 @@ data class ServerMessage(val type: String, val reqId: String?, val data: JsonObj
         )
     }
 
+    /** route.update (app-api.md 7-1) → 시연 주행 경로. 목적지가 없거나 점이 2개 미만이면 null */
+    fun demoRoute(): DemoRoute? {
+        val path = data.getAsJsonArray("path")?.mapNotNull { e ->
+            val p = e.takeIf { it.isJsonArray }?.asJsonArray?.takeIf { it.size() == 2 } ?: return@mapNotNull null
+            doubleArrayOf(p[0].asDouble, p[1].asDouble)
+        } ?: return null
+        if (path.size < 2) return null
+        val stops = data.getAsJsonArray("waypoints")?.mapNotNull { e ->
+            val w = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+            Place(
+                w.str("name") ?: return@mapNotNull null,
+                w.num("lat") ?: return@mapNotNull null,
+                w.num("lng") ?: return@mapNotNull null,
+            )
+        } ?: emptyList()
+        val dist = data.num("distanceM")
+        val time = data.num("durationS")
+        val speed = if (dist != null && time != null && dist > 0 && time > 0) dist / time else DemoRoute.DEFAULT_SPEED_MPS
+        return DemoRoute(path, stops, speed)
+    }
+
     /** waypoint.expired의 requestId */
     fun requestId(): Long? = data.get("requestId")?.takeIf { it.isJsonPrimitive }?.asLong
 }
@@ -133,3 +156,6 @@ data class DepartureMessages(val messages: List<DepartureMessage> = emptyList(),
 private fun JsonObject.obj(name: String): JsonObject? = get(name)?.takeIf { it.isJsonObject }?.asJsonObject
 
 private fun JsonObject.str(name: String): String? = get(name)?.takeIf(JsonElement::isJsonPrimitive)?.asString
+
+private fun JsonObject.num(name: String): Double? =
+    get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asDouble

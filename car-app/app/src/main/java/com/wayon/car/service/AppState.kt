@@ -2,6 +2,7 @@ package com.wayon.car.service
 
 import com.wayon.car.Config
 import com.wayon.car.car.CarLocation
+import com.wayon.car.car.DemoState
 import com.wayon.car.car.DriveInfo
 import com.wayon.car.car.Energy
 import com.wayon.car.car.Gear
@@ -27,6 +28,8 @@ data class AppState(
     /** 플랫폼 주행 규제 (CarUxRestrictions). null이면 못 받은 것 */
     val uxRestricted: Boolean? = null,
     val server: ServerUi = ServerUi(),
+    /** 시연 주행 (9장) */
+    val demo: DemoState = DemoState(),
 ) {
     /** 기어 P이고 주행 규제가 없을 때만 정차. 기어를 못 읽으면 주행 중으로 본다 (5장, 안전한 쪽) */
     val parked: Boolean get() = UxRestrictions.isParked(gear, uxRestricted)

@@ -86,7 +86,9 @@ fun HomeScreen(
         verticalArrangement = Arrangement.Center,
     ) {
         val server = state.server
-        Text("WAY:ON", fontSize = 56.sp, fontWeight = FontWeight.ExtraBold, color = Navy, letterSpacing = 2.sp)
+        // 시연 주행 중이면 눈에 띄게 (9장: 실제 위치가 아님을 알린다)
+        if (state.demo.running) Text("시연 주행 중 · ${state.demo.speed}배", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Blue)
+        Text("WAY:ON",fontSize = 56.sp, fontWeight = FontWeight.ExtraBold, color = Navy, letterSpacing = 2.sp)
         Spacer(Modifier.height(40.dp))
         // 목적지 이름이 길면 두 줄까지, 그래도 넘치면 글자를 줄인다
         FitText(destinationLine(state), 64.sp, color = Navy, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2)

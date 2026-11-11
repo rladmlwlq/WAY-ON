@@ -358,6 +358,8 @@ class WsTest {
 		assertEquals(List.of(), update.get("waypoints")); // 좌표 모르는 경유지는 뺀다
 		assertEquals("부산역", jdbc.queryForObject("SELECT dest_name FROM trip WHERE vehicle_id = ?", String.class,
 				vehicleIds.get(0)));
+		// 차도 같은 경로선을 받는다 (시연 주행)
+		assertEquals(2, ((List<?>) c[0].next("route.update").get("path")).size());
 
 		// 남은 거리만 바뀌면 다시 보내지 않는다
 		c[0].send(route.replace("312000", "311000"));
@@ -474,7 +476,7 @@ class WsTest {
 		c[1].send(PROPOSE.replace("kk:123", "kk:999"));
 		assertEquals("PLACE_NOT_FOUND", c[1].next("error").get("code"));
 		c[0].send(PROPOSE);
-		assertEquals("FORBIDDEN_ROLE", c[0].next("error").get("code"));
+		assertEquals("FORBIDDEN_ROLE", c[0].until("error").get("code")); // 차가 받은 route.update는 건너뛴다
 	}
 
 	@Test

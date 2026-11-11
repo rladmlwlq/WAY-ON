@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import com.wayon.car.BuildConfig
 import com.wayon.car.Config
 import com.wayon.car.car.CarSignals
+import com.wayon.car.car.DemoRoute
 import com.wayon.car.car.Gear
 import com.wayon.car.car.NaviBridge
 import com.wayon.car.car.UxRestrictions
@@ -132,6 +133,7 @@ class WayOnService : LifecycleService() {
         lifecycleScope.launch { navi.drive.collect(guide::onDrive) }
         lifecycleScope.launch { navi.events.collect(guide::onNavi) }
         lifecycleScope.launch { carSignals.gear.collect(guide::onGear) }
+        lifecycleScope.launch { carSignals.gear.collect(navi::onDemoGear) }
 
         // 에너지 제안·목적지 근처 주차장 (6-5, 6-6): 남은 거리·시간이나 에너지가 바뀔 때마다 본다
         lifecycleScope.launch {
@@ -168,12 +170,12 @@ class WayOnService : LifecycleService() {
         lifecycleScope.launch {
             combine(
                 combine(carSignals.gear, carSignals.energy, navi.location, ::Triple),
-                combine(navi.drive, serverUi, ::Pair),
+                combine(navi.drive, serverUi, navi.demo, ::Triple),
                 myWaypoints.list,
                 guide.ui,
                 uxRestrictions.restricted,
-            ) { (gear, energy, location), (drive, server), waypoints, restArea, ux ->
-                AppState(gear, energy, location, drive, waypoints, restArea, ux, server)
+            ) { (gear, energy, location), (drive, server, demo), waypoints, restArea, ux ->
+                AppState(gear, energy, location, drive, waypoints, restArea, ux, server, demo)
             }.collect { _state.value = it }
         }
 
@@ -287,6 +289,8 @@ class WayOnService : LifecycleService() {
                 REQ_ACCEPT -> applyRequest()
             }
             "passengers.update" -> serverUi.update { it.copy(passengers = message.passengers()) }
+            // 폰 지도와 같은 경로선. 시연 주행이 이것을 따라 달린다 (car-app-design.md 9장)
+            "route.update" -> navi.setDemoRoute(message.demoRoute())
             "waypoint.request" -> message.waypointRequest()?.let(::showRequest)
             "waypoint.expired" -> if (message.requestId() == serverUi.value.request?.request?.requestId) closeRequestIfWaiting()
             "departure.status" -> {
@@ -532,6 +536,27 @@ class WayOnService : LifecycleService() {
     private fun startTrip() {
         if (serverUi.value.locationConsent) {
             server.send("trip.start", mapOf("locationConsent" to true), REQ_TRIP_START)
+        }
+    }
+
+    // ---- 시연 주행 (car-app-design.md 9장). 설정 화면에서 켜고 끈다 ----
+
+    fun startDemo() = navi.startDemo()
+
+    fun stopDemo() = navi.stopDemo()
+
+    fun setDemoSpeed(speed: Int) = navi.setDemoSpeed(speed)
+
+    /**
+     * 휴게소를 거치는 시연 경로를 내비에 넣는다. 휴게소는 myWaypoints에 기억해야 도착 안내·휴게소 지도가 뜬다.
+     * 서버가 경로선을 보내 주면 [startDemo]로 달린다. 동승자 제안이 아니라서 폰에는 휴게소 카드가 가지 않는다
+     */
+    fun setRestAreaDemoRoute() {
+        val stop = DemoRoute.REST_AREA_STOP
+        myWaypoints.add(MyWaypoint(stop.name, MyWaypoint.TYPE_REST_AREA, stop.lat, stop.lng, extId = DemoRoute.REST_AREA_EXT_ID))
+        if (!navi.requestRouteVia(DemoRoute.REST_AREA_DEST, listOf(stop))) {
+            myWaypoints.remove(stop.name)
+            serverUi.update { it.copy(notice = "내비에 경로를 넣지 못했어요") }
         }
     }
 
