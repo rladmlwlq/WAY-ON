@@ -511,7 +511,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 | `trip.started` | 폰 | `{"tripId": "…", "startedAt": "…"}` |
 | `trip.ended` | 폰 | `{"reason": "ENDED"}` 또는 `"EXPIRED"` |
 | `trip.state` | 폰 | `{"car": {"lat", "lng", "heading", "at"}, "gear": "DRIVE", "energy": {"energyType", "energyPct", "rangeM"}}` 위치가 올 때마다 |
-| `route.update` | 폰 | 아래 7-1 |
+| `route.update` | 둘 다 | 아래 7-1. 차는 시연 주행에 씀 (car-app-design.md 9장) |
 | `passengers.update` | 차 | `{"passengers": [{"passengerId", "nickname", "online", "pushEnabled"}]}` 연결·끊김·해제 때 |
 | `waypoint.request` | 차 | 아래 7-2 |
 | `waypoint.expired` | 차 | `{"requestId": 88}` 10초 초과 또는 새 요청이 와서 밀림 → 수락 화면 닫기 |

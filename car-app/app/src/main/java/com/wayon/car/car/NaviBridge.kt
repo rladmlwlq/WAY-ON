@@ -5,6 +5,7 @@ import ai.pleos.playground.navi.constants.WaypointCmdType
 import ai.pleos.playground.navi.constants.WaypointIndex
 import ai.pleos.playground.navi.data.RequestWaypointInfo
 import ai.pleos.playground.navi.data.RouteInfo
+import ai.pleos.playground.navi.data.RouteWithWaypointsRequest
 import ai.pleos.playground.navi.data.CurrentLocationInfo
 import ai.pleos.playground.navi.data.DestinationInfo
 import ai.pleos.playground.navi.data.WaypointInfo
@@ -40,6 +41,20 @@ data class DriveInfo(val destination: Remain?, val waypoints: List<Remain>)
 
 /** 목적지·경유지 좌표 (`getDestinationInfo`, `getWaypointInfo`). 서버 길찾기(app-api.md 5-4)에 쓴다 */
 data class Place(val name: String, val lat: Double, val lng: Double)
+
+/**
+ * 시연 주행 (car-app-design.md 9장). [hasRoute]가 false면 서버 경로선을 아직 못 받음.
+ * [speed]는 배속 (1, 5, 20). [remainM]은 경로 끝까지 남은 거리.
+ * [pausedAt]: 경유지에 닿아 서 있는 중이면 그 이름. 기어 P → D 또는 [계속]이면 다시 달린다
+ */
+data class DemoState(
+    val running: Boolean = false,
+    val speed: Int = 5,
+    val hasRoute: Boolean = false,
+    val remainM: Int? = null,
+    val arrived: Boolean = false,
+    val pausedAt: String? = null,
+)
 
 /** 상태가 아니라 한 번 일어나는 일 */
 sealed interface NaviEvent {
@@ -85,16 +100,31 @@ class NaviBridge(context: Context) {
     )
     val events: SharedFlow<NaviEvent> = _events.asSharedFlow()
 
+    private val _demo = MutableStateFlow(DemoState())
+    val demo: StateFlow<DemoState> = _demo.asStateFlow()
+    private var demoRoute: DemoRoute? = null
+    /** 시연 경로 출발점에서 간 거리(m) */
+    private var demoM = 0.0
+    /** 시연 중 지나간 경유지. 내비는 계속 경유지로 알려 주므로 이 이름은 뺀다 */
+    private val demoPassed = mutableSetOf<String>()
+    /** 내비가 마지막으로 준 남은 거리·시간. 시연 중에는 이름만 이것을 따르고 거리는 경로선으로 계산한다 */
+    @Volatile private var naviDrive: DriveInfo? = null
+    /** 경유지에 선 뒤 기어 P를 한 번 거쳤는지 */
+    private var demoParkedAtStop = false
+    private var demoGear = Gear.UNKNOWN
+
     private val listener = object : NaviHelperEventListener {
         override fun onCurrentLocationInfo(currentLocationInfo: CurrentLocationInfo) {
+            if (_demo.value.running) return
             val it = currentLocationInfo
             _location.value = CarLocation(it.latitude, it.longitude, it.heading.toInt().mod(360), System.currentTimeMillis())
         }
 
         override fun onDrivingInfo(drivingInfo: DrivingInfo) {
             val info = drivingInfo.toDriveInfo()
-            val old = _drive.value
-            _drive.value = info
+            val old = naviDrive
+            naviDrive = info
+            if (!_demo.value.running) _drive.value = info
             // 남은 거리·시간은 자주 바뀌니 이름이 바뀔 때만 좌표를 다시 묻는다
             val names = { d: DriveInfo? -> listOf(d?.destination?.name) + d?.waypoints.orEmpty().map { it.name } }
             if (names(old) != names(info)) requestPlaces()
@@ -176,6 +206,7 @@ class NaviBridge(context: Context) {
 
     fun stop() {
         main.removeCallbacks(poll)
+        main.removeCallbacks(demoTick)
         connected = false
         runCatching { navi.removeListener(listener) }
         navi.release()
@@ -218,6 +249,115 @@ class NaviBridge(context: Context) {
         }.onFailure { log("requestRoute 실패: ${it.message}") }.isSuccess
     }
 
+    // ---- 시연 주행 (car-app-design.md 9장). 에뮬레이터 차는 움직이지 않아서 서버 경로선을 따라 위치·남은 거리를 대신 준다.
+    // 메인 스레드에서만 부른다
+
+    private val demoTick = object : Runnable {
+        override fun run() {
+            val route = demoRoute
+            if (route != null && _demo.value.pausedAt == null) demoM =(demoM + route.speedMps * _demo.value.speed * DEMO_TICK_MS / 1000).coerceAtMost(route.totalM)
+            publishDemo()
+            main.postDelayed(this, DEMO_TICK_MS)
+        }
+    }
+
+    /** 서버 경로선 (route.update). 시연 중이면 지금 위치에서 이어 달린다 (경유지를 넣으면 서버가 지금 위치부터 다시 만든다) */
+    fun setDemoRoute(route: DemoRoute?) {
+        val here = _location.value
+        demoRoute = route
+        demoM = if (route != null && here != null && _demo.value.running) route.nearestM(here.lat, here.lng) else 0.0
+        publishDemo()
+    }
+
+    /** 경로 출발점(또는 지금 위치에서 가까운 곳)부터 달린다. 경로가 없으면 아무것도 안 함 */
+    fun startDemo() {
+        val route = demoRoute ?: return
+        if (_demo.value.pausedAt != null) return resumeDemo()
+        if (_demo.value.running) return
+        val here = _location.value
+        demoM = if (here == null) 0.0 else route.nearestM(here.lat, here.lng)
+        if (demoM >= route.totalM) demoM = 0.0 // 끝에 서 있으면 처음부터 다시
+        demoPassed.clear()
+        _demo.value = _demo.value.copy(running = true)
+        main.post(demoTick)
+        log("시연 주행 시작 ${route.totalM.toInt()}m")
+    }
+
+    /** 멈추면 내비가 주는 진짜 위치·남은 거리로 돌아간다 */
+    @SuppressLint("MissingPermission")
+    fun stopDemo() {
+        if (!_demo.value.running) return
+        main.removeCallbacks(demoTick)
+        _demo.value = _demo.value.copy(running = false, arrived = false, pausedAt = null)
+        _drive.value = naviDrive
+        if (connected) runCatching { navi.getCurrentLocationInfo() }
+        publishDemo()
+    }
+
+    fun setDemoSpeed(speed: Int) {
+        _demo.value = _demo.value.copy(speed = speed)
+    }
+
+    /** 경유지에 서 있을 때: 실제처럼 기어 P(휴게소 지도) → D(떠남)면 다시 달린다 */
+    fun onDemoGear(gear: Gear) {
+        demoGear = gear
+        if (_demo.value.pausedAt == null) return
+        if (gear == Gear.PARK) demoParkedAtStop = true
+        else if (gear == Gear.DRIVE && demoParkedAtStop) resumeDemo()
+    }
+
+    private fun resumeDemo() {
+        demoParkedAtStop = false
+        _demo.value = _demo.value.copy(pausedAt = null)
+    }
+
+    private fun publishDemo() {
+        val route = demoRoute
+        val s = _demo.value
+        var pausedAt = s.pausedAt
+        if (s.running && route != null) {
+            _location.value = route.locationAt(demoM, System.currentTimeMillis())
+            val base = naviDrive
+            val waypoints = base?.waypoints.orEmpty().mapNotNull { w ->
+                if (w.name in demoPassed) return@mapNotNull null
+                // 경로선에 없는 경유지(좌표를 모르는 것)는 내비 값 그대로
+                val at = route.stopAtM[w.name] ?: return@mapNotNull w
+                if (demoM < at - DEMO_ARRIVE_M) return@mapNotNull route.remain(w.name, demoM, at)
+                demoPassed += w.name
+                pausedAt = w.name // 경유지(휴게소)에 들어가 선다
+                demoParkedAtStop = demoGear == Gear.PARK // 기어를 안 바꾸고 시연하면 이미 P
+                emit(NaviEvent.WaypointArrived(w.name))
+                null
+            }
+            _drive.value = DriveInfo(base?.destination?.let { route.remain(it.name, demoM, route.totalM) }, waypoints)
+        }
+        val left = route?.let { (it.totalM - demoM).coerceAtLeast(0.0).toInt() }
+        _demo.value = s.copy(hasRoute = route != null, remainM = left, arrived = s.running && left == 0, pausedAt = pausedAt)
+    }
+
+    /** 목적지와 경유지를 한 번에 (시연 경로). 성공은 [NaviEvent.RouteStarted] */
+    @SuppressLint("MissingPermission")
+    fun requestRouteVia(destination: Place, waypoints: List<Place>): Boolean {
+        if (!connected) return false
+        return runCatching {
+            navi.requestRouteWithWaypoints(
+                RouteWithWaypointsRequest(
+                    RouteInfo(
+                        latitude = destination.lat, longitude = destination.lng, poiName = destination.name,
+                        poiId = "", address = "", poiSubId = "",
+                    ),
+                    waypoints.mapIndexed { i, w ->
+                        RequestWaypointInfo(
+                            latitude = w.lat, longitude = w.lng, poiName = w.name,
+                            waypointIndex = if (i == 0) WaypointIndex.FIRST else WaypointIndex.SECOND,
+                            poiId = "", address = "", poiSubId = "",
+                        )
+                    },
+                ),
+            )
+        }.onFailure { log("requestRouteWithWaypoints 실패: ${it.message}") }.isSuccess
+    }
+
     /** 답은 [listener]의 onDestinationInfo·onWayPointInfo로 온다 */
     @SuppressLint("MissingPermission")
     private fun requestPlaces() {
@@ -234,6 +374,12 @@ class NaviBridge(context: Context) {
 
     private fun log(text: String) {
         if (BuildConfig.DEBUG) Log.d(CarSignals.TAG, text)
+    }
+
+    private companion object {
+        const val DEMO_TICK_MS = 1_000L
+        /** 경유지 이만큼 앞이면 도착으로 본다 */
+        const val DEMO_ARRIVE_M = 30
     }
 }
 

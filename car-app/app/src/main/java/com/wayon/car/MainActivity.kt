@@ -95,8 +95,13 @@ class MainActivity : ComponentActivity() {
                             when {
                                 managing && state.parked -> PassengersScreen(
                                     state.server.passengers,
+                                    state.demo,
                                     onBack = { managing = false },
                                     onRemove = { service?.removePassenger(it) },
+                                    onDemoStart = { service?.startDemo() },
+                                    onDemoStop = { service?.stopDemo() },
+                                    onDemoSpeed = { service?.setDemoSpeed(it) },
+                                    onDemoRestArea = { service?.setRestAreaDemoRoute() },
                                 )
                                 state.server.qr != null && state.parked -> QrScreen(
                                     state,

@@ -277,6 +277,8 @@ public class TripLiveService {
 			l.route = versioned;
 		}
 		sessions.sendToPassengers(vehicleId, "route.update", l.route);
+		// 차도 같은 경로선을 받아 시연 주행에 쓴다 (car-app-design.md 9장)
+		sessions.sendToCar(vehicleId, "route.update", l.route);
 	}
 
 	private void sendState(long vehicleId, Live l) {
