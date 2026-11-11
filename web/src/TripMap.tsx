@@ -183,8 +183,49 @@ export function TripMap({ carState, route, places, selectedId, onSelect }: Props
     if (!route?.destination && !places?.length) map.setCenter(at)
   }, [kakao, carState, route, places])
 
+  // [현 위치]: 차 위치로. 차 위치가 아직 없으면 폰 위치(https·localhost에서만 됨)에 점을 찍는다
+  const me = useRef<Overlay | null>(null)
+  const [locating, setLocating] = useState(false)
+  const goHere = () => {
+    if (!kakao) return
+    const { maps, map } = kakao
+    const show = (lat: number, lng: number) => {
+      map.setLevel(4)
+      map.setCenter(new maps.LatLng(lat, lng))
+    }
+    if (carState) return show(carState.car.lat, carState.car.lng)
+    if (!navigator.geolocation) return
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setLocating(false)
+        const at = new maps.LatLng(coords.latitude, coords.longitude)
+        if (!me.current) {
+          const el = document.createElement('div')
+          el.className = 'me-marker'
+          el.setAttribute('aria-label', '내 위치')
+          me.current = new maps.CustomOverlay({ position: at, content: el, zIndex: 3 })
+          me.current.setMap(map)
+        }
+        me.current.setPosition(at)
+        show(coords.latitude, coords.longitude)
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10_000 },
+    )
+  }
+
   if (failed) {
     return <p className="help">지도를 불러오지 못했어요. 차와 연결은 그대로 유지돼요.</p>
   }
-  return <div ref={box} className="trip-map" role="img" aria-label="차 위치와 경로 지도" />
+  return (
+    <div className="trip-map-wrap">
+      <div ref={box} className="trip-map" role="img" aria-label="차 위치와 경로 지도" />
+      {kakao && (
+        <button type="button" className="map-locate" onClick={goHere} disabled={locating} aria-label="현 위치로" title="현 위치로">
+          ◎
+        </button>
+      )}
+    </div>
+  )
 }

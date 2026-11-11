@@ -393,6 +393,38 @@ fieldset:disabled {
   border-radius: 12px;
 }
 
+.trip-map-wrap {
+  position: relative;
+}
+
+/* 지도 오른쪽 아래 [현 위치] */
+.map-locate {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  min-height: 0;
+  padding: 0;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--accent);
+  background: #fff;
+  border: 1px solid var(--border, #d9dee8);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgb(20 33 61 / 0.25);
+}
+
+.me-marker {
+  width: 16px;
+  height: 16px;
+  background: #1f9d55;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 6px rgb(31 157 85 / 0.2);
+}
+
 .car-marker {
   display: grid;
   place-items: center;

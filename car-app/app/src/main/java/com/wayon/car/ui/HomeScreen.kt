@@ -2,6 +2,7 @@ package com.wayon.car.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.widthIn
@@ -70,11 +71,15 @@ fun HomeScreen(
         return
     }
 
-    // QR 화면과 같은 배경·색·가운데 정렬. 크기는 CarUi.kt. 길면 말줄임 대신 글자가 줄어든다 (FitText)
+    // QR 화면과 같은 배경·색·가운데 정렬. 길면 말줄임 대신 글자가 줄어든다 (FitText)
+    Box(modifier.fillMaxSize().background(Brush.verticalGradient(listOf(BgTop, BgBottom)))) {
+    // 버튼 묶음은 최대 1010dp 폭, 좁은 창이면 창 폭에 맞춘다 (글자는 FitText가 줄인다)
+    val buttonH = 120.dp
+    val buttonFont = 52.sp
+    val button = Modifier.widthIn(max = 1010.dp).fillMaxWidth().height(buttonH)
     Column(
-        modifier
+        Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(BgTop, BgBottom)))
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 48.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -110,32 +115,32 @@ fun HomeScreen(
             if (!server.locationConsent) {
                 ConsentCard(onConsent)
             } else {
-                // [출발해요] (출발해요 기획 6-1): 받을 동승자가 있으면 맨 위에 두 버튼 폭만큼 크게
+                // [출발해요] (출발해요 기획 6-1): 받을 동승자가 있으면 맨 위에 화면 폭 그대로
                 if (canDepart) {
-                    Button(
-                        onClick = onDeparture,
-                        modifier = Modifier.width(555.dp * 2 + 32.dp).height(120.dp),
-                        contentPadding = ButtonPadding,
-                    ) { ButtonText("🚗 출발해요", PrimaryButtonFont) }
-                    Spacer(Modifier.height(32.dp))
+                    Button(onClick = onDeparture, modifier = button, contentPadding = ButtonPadding) {
+                        ButtonText("🚗 출발해요", buttonFont)
+                    }
+                    Spacer(Modifier.height(20.dp))
                 }
-                // 관리 왼쪽, 연결 오른쪽. 출발해요가 있으면 연결도 테두리 버튼으로 (주 버튼은 하나만)
-                Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = onManage, modifier = PrimaryButton, contentPadding = ButtonPadding) {
-                        ButtonText("동승자 관리", PrimaryButtonFont)
+                // 관리 왼쪽, 연결 오른쪽 반반. 출발해요가 있으면 연결도 테두리 버튼으로 (주 버튼은 하나만)
+                Row(Modifier.widthIn(max = 1010.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    val half = Modifier.weight(1f).height(buttonH)
+                    OutlinedButton(onClick = onManage, modifier = half, contentPadding = ButtonPadding) {
+                        ButtonText("동승자 관리", buttonFont)
                     }
                     if (canDepart) {
-                        OutlinedButton(onClick = onOpenQr, modifier = PrimaryButton, contentPadding = ButtonPadding) {
-                            ButtonText("동승자 연결", PrimaryButtonFont)
+                        OutlinedButton(onClick = onOpenQr, modifier = half, contentPadding = ButtonPadding) {
+                            ButtonText("동승자 연결", buttonFont)
                         }
                     } else {
-                        Button(onClick = onOpenQr, modifier = PrimaryButton, contentPadding = ButtonPadding) {
-                            ButtonText("동승자 연결", PrimaryButtonFont)
+                        Button(onClick = onOpenQr, modifier = half, contentPadding = ButtonPadding) {
+                            ButtonText("동승자 연결", buttonFont)
                         }
                     }
                 }
             }
         }
+    }
     }
 }
 

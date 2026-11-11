@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** 홈의 [동승자 관리]·[동승자 연결] */
+/** QR 화면 [동승자 관리]·요청 화면 버튼. 홈 버튼은 화면 크기에 맞춰 HomeScreen에서 정한다 */
 internal val PrimaryButton = Modifier.width(555.dp).height(120.dp)
 internal val PrimaryButtonFont = 66.sp
 
