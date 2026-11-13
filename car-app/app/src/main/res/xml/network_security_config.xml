@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  기본은 HTTPS만 (way-on.md 3.12, Pleos 앱 보안 가이드).
+  예외: 에뮬레이터에서 PC의 로컬 서버(10.0.2.2)만 http 허용. 서버를 배포하기 전 제출 APK가 로컬 서버로 동작하게 하려는 것.
+  서버를 HTTPS 도메인에 배포하면 이 예외는 쓰이지 않는다 (README)
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>
