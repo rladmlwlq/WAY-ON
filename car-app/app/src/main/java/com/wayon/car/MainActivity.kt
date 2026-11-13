@@ -39,6 +39,7 @@ import com.wayon.car.ui.DepartureScreen
 import androidx.compose.material3.lightColorScheme
 import com.wayon.car.ui.Blue
 import com.wayon.car.ui.HomeScreen
+import com.wayon.car.ui.EnergyScreen
 import com.wayon.car.ui.ParkingScreen
 import com.wayon.car.ui.PassengersScreen
 import com.wayon.car.ui.RequestScreen
@@ -99,6 +100,12 @@ class MainActivity : ComponentActivity() {
                     // 목적지 근처 주차장 목록 (6-6). 정차 중에만, 주행하면 닫는다
                     var parkingOpen by remember { mutableStateOf(false) }
                     LaunchedEffect(state.parked) { if (!state.parked) parkingOpen = false }
+                    // 경로 위 충전소·주유소 목록 (6-5). 정차 중에만, 주행하면 닫는다
+                    var energyOpen by remember { mutableStateOf(false) }
+                    // 휴게소 지도에서 [←]로 나온 휴게소 이름 (4-7). 다른 휴게소에 도착하면 다시 지도가 뜬다
+                    var hiddenRestArea by rememberSaveable { mutableStateOf<String?>(null) }
+                    val arrivedName = state.restArea.arrived?.name
+                    LaunchedEffect(state.parked) { if (!state.parked) energyOpen = false }
                     // 키패드가 올라오면 내용만 그만큼 위로 (배경은 키패드 뒤까지 그대로)
                     Box(Modifier.safeDrawingPadding()) {
                         Column {
@@ -116,6 +123,18 @@ class MainActivity : ComponentActivity() {
                                     onBack = { service?.closeQr() },
                                     onRenew = { service?.openQr() },
                                     onManage = { managing = true },
+                                )
+                                energyOpen && state.parked && state.server.energy != null -> EnergyScreen(
+                                    state.server.energy!!,
+                                    onChoose = {
+                                        service?.chooseEnergy(it)
+                                        energyOpen = false
+                                    },
+                                    onBack = { energyOpen = false },
+                                    onClose = {
+                                        service?.closeEnergy()
+                                        energyOpen = false
+                                    },
                                 )
                                 parkingOpen && state.parked && state.server.parking != null -> ParkingScreen(
                                     state.server.parking!!,
@@ -149,6 +168,10 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onManage = { managing = true },
                                     onParking = { parkingOpen = true },
+                                    onEnergy = { energyOpen = true },
+                                    mapHidden = arrivedName != null && arrivedName == hiddenRestArea,
+                                    onHideMap = { hiddenRestArea = arrivedName },
+                                    onShowMap = { hiddenRestArea = null },
                                 )
                             }
                         }

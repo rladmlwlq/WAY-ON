@@ -22,6 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +50,11 @@ fun HomeScreen(
     onDeparture: () -> Unit = {},
     onManage: () -> Unit = {},
     onParking: () -> Unit = {},
+    onEnergy: () -> Unit = {},
+    /** 휴게소 지도에서 [←]로 나와 홈을 보는 중. 홈에 [지도 보기]가 생긴다 */
+    mapHidden: Boolean = false,
+    onHideMap: () -> Unit = {},
+    onShowMap: () -> Unit = {},
 ) {
     val arrived = state.restArea.arrived
     // [출발해요]: 정차 중이고 알림을 받을 동승자가 1명 이상일 때 (출발해요 기획 7장).
@@ -58,13 +64,15 @@ fun HomeScreen(
         (waiting || state.server.departureReceivers.isNotEmpty())
     // 도착은 내비 도착 콜백으로 달리는 중에도 생길 수 있다. 정차(기어 P, 주행 규제 없음)일 때만 지도를 연다
     val map = arrived?.map
-    if (state.parked && map != null) {
+    if (state.parked && map != null && !mapHidden) {
         Column(modifier.fillMaxSize()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // 출발하지 않아도 홈으로 (동승자 관리·QR 등). 도착 상태는 그대로라 홈의 [지도 보기]로 돌아온다
+                TextButton(onClick = onHideMap) { Text("←", style = MaterialTheme.typography.titleLarge, color = Navy) }
                 Text("WAY:ON", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(map.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 // 휴게소 지도 위 [출발해요] (4-7)
@@ -141,6 +149,20 @@ fun HomeScreen(
                         Button(onClick = onOpenQr, modifier = half, contentPadding = ButtonPadding) {
                             ButtonText("동승자 연결", buttonFont)
                         }
+                    }
+                }
+                // 휴게소 지도에서 [←]로 나왔으면 다시 들어가는 버튼 (4-7)
+                if (map != null && mapHidden) {
+                    Spacer(Modifier.height(20.dp))
+                    OutlinedButton(onClick = onShowMap, modifier = button, contentPadding = ButtonPadding) {
+                        ButtonText("🏢 ${map.name} 지도 보기", buttonFont)
+                    }
+                }
+                // 동승자가 없을 때 서버가 차로 보낸 경로 위 충전소·주유소 (6-5). 정차 중에만 고른다
+                server.energy?.takeIf { it.places.isNotEmpty() }?.let { e ->
+                    Spacer(Modifier.height(20.dp))
+                    OutlinedButton(onClick = onEnergy, modifier = button, contentPadding = ButtonPadding) {
+                        ButtonText(if (e.ev) "🔋 경로 위 충전소 ${e.places.size}곳" else "⛽ 경로 위 주유소 ${e.places.size}곳", buttonFont)
                     }
                 }
                 // 동승자가 없을 때 서버가 차로 보낸 목적지 근처 주차장 (6-6). 정차 중에만 고른다

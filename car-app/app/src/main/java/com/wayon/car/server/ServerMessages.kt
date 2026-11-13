@@ -42,6 +42,21 @@ data class ParkingSpot(
 /** 목적지 근처 공영주차장 제안. 동승자가 없을 때만 차로 온다 */
 data class ParkingSuggestion(val destName: String?, val places: List<ParkingSpot>)
 
+/** energy.suggest의 충전소·주유소 1곳. info: "전기차 충전소" 또는 "휘발유 1,689원" */
+data class EnergySpot(
+    val type: String,
+    val extId: String,
+    val name: String,
+    val address: String?,
+    val lat: Double,
+    val lng: Double,
+    val distM: Int,
+    val info: String?,
+)
+
+/** 에너지 제안 (F6). 동승자가 없을 때만 차로 온다. ev면 충전소, 아니면 주유소 */
+data class EnergySuggestion(val ev: Boolean, val rangeM: Int, val remainDistM: Int?, val places: List<EnergySpot>)
+
 /** 서버가 보낸 메시지 1개 {"type", "reqId", "data"} (app-api.md 4-2) */
 data class ServerMessage(val type: String, val reqId: String?, val data: JsonObject) {
 
@@ -136,6 +151,31 @@ data class ServerMessage(val type: String, val reqId: String?, val data: JsonObj
             )
         }
         return ParkingSuggestion(data.str("destName"), places)
+    }
+
+    /** energy.suggest. 장소 행이 깨졌으면 그 행만 뺀다 */
+    fun energySuggestion(): EnergySuggestion {
+        val places = data.get("places")?.takeIf { it.isJsonArray }?.asJsonArray.orEmpty().mapNotNull { e ->
+            val p = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+            val detail = p.obj("detail")
+            val price = detail?.num("gasoline")?.toInt()
+            EnergySpot(
+                type = p.str("type") ?: return@mapNotNull null,
+                extId = p.str("extId") ?: return@mapNotNull null,
+                name = p.str("name") ?: return@mapNotNull null,
+                address = p.str("address"),
+                lat = p.num("lat")?.toDouble() ?: return@mapNotNull null,
+                lng = p.num("lng")?.toDouble() ?: return@mapNotNull null,
+                distM = p.num("distM")?.toInt() ?: 0,
+                info = if (price != null) "휘발유 ${"%,d".format(price)}원" else detail?.str("category"),
+            )
+        }
+        return EnergySuggestion(
+            ev = data.str("energyType") == "EV",
+            rangeM = data.num("rangeM")?.toInt() ?: 0,
+            remainDistM = data.num("remainDistM")?.toInt(),
+            places = places,
+        )
     }
 
     /** waypoint.expired의 requestId */

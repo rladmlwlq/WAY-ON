@@ -23,6 +23,8 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-websocket")
 	// Spring Initializr 목록엔 아직 없지만 4.1.x가 Spring Boot 4.1 지원 버전입니다
 	implementation("org.mybatis.spring.boot:mybatis-spring-boot-starter:4.1.0")
+	// 오피넷 좌표계(KATEC) ↔ WGS84 (api.md 4)
+	implementation("org.locationtech.proj4j:proj4j:1.4.1")
 	runtimeOnly("com.mysql:mysql-connector-j")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
