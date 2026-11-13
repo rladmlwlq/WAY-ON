@@ -947,8 +947,8 @@ app-api.md를 따르되, 앱 결정 때문에 규격에 더할 것이 있습니�
 - [x] **임시 확인 화면 정리** (11/5): `LocationCheck.kt`, `VehicleCheck.kt`, `SdkCheck.kt`와 `MainActivity`의 확인용 화면·adb 명령 처리를 지움. `NaviBridge`, `CarSignals`는 10장 결과대로 새로 작성
 - [ ] **서버·웹 주소**: 지금은 로컬 개발용(`http://10.0.2.2:8080`, `http://localhost:5173`). 서버 배포처와 Vercel 주소가 정해지면 `app/build.gradle.kts`의 `SERVER_URL`, `WEB_URL`을 바꿈. 디버그·릴리스 값을 나눌지도 그때 정함
 - [ ] **DO 선언 이름 확인**: Android Automotive 표준 `distractionOptimized`를 씀. Pleos도 같은지 문서로 확인하고, 에뮬레이터에서 주행 중 수락 화면이 막히지 않는지 봄
-- [ ] **릴리스 서명**: 서명 키 만들기, `signingConfigs` 설정. 키 파일과 비밀번호는 저장소에 넣지 않음
-- [ ] **APK 이름**: 릴리스 출력 이름을 `WayOn_WayOn_release.apk`로 (신청서 팀명 확인 후). 제출 위치는 `apk/`
+- [x] **릴리스 서명** (11/13): `car-app/wayon-release.jks` + `car-app/keystore.properties`(git 제외)로 `signingConfigs`. 키를 잃으면 같은 앱으로 업데이트할 수 없으니 두 파일을 팀 공유 드라이브에 따로 보관
+- [x] **APK 이름** (11/13): `gradlew assembleRelease`가 `apk/WayOn_WayOn_release.apk`로 복사 (신청서 팀명이 다르면 `copyReleaseApk`의 이름만 바꿈). 서버 배포 전이라 릴리스도 에뮬레이터 로컬 서버(10.0.2.2)만 http 허용 (`network_security_config.xml`), 배포하면 `local.properties`의 `SERVER_URL`·`WEB_URL`로 빌드
 - [x] **FusedLocation 빼기** (11/9): 에뮬레이터에서 미국 좌표만 주고 위치는 NaviHelper로 받으므로, SDK 의존성과 `FUSED_LOCATION` 권한을 뺌 (보안 가이드 "필요 없는 권한 금지")
 - [ ] **릴리스 로그 끄기**: 위치·토큰이 들어가는 로그는 릴리스에서 안 나오게 (보안 가이드 "민감 정보 로그 금지")
 - [ ] **릴리스 난독화**: 지금 `isMinifyEnabled = false`. 켤 경우 Gson 모델·Pleos SDK가 깨지지 않게 `proguard-rules.pro`에 규칙 추가. 시간이 없으면 끈 채로 제출
