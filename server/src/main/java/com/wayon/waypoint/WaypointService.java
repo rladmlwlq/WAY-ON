@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 
 import com.wayon.common.ApiException;
+import com.wayon.parking.ParkingService;
 import com.wayon.restarea.RestAreaDto;
 import com.wayon.restarea.RestAreaService;
 import com.wayon.search.SearchClients;
@@ -48,14 +49,16 @@ public class WaypointService {
 	private final TripLiveService live;
 	private final SearchClients search;
 	private final RestAreaService restAreas;
+	private final ParkingService parking;
 	private final WsSessions sessions;
 	private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor();
 
 	public WaypointService(TripMapper mapper, TripLiveService live, SearchClients search, RestAreaService restAreas,
-			WsSessions sessions) {
+			ParkingService parking, WsSessions sessions) {
 		this.mapper = mapper;
 		this.live = live;
 		this.search = search;
+		this.parking = parking;
 		this.restAreas = restAreas;
 		this.sessions = sessions;
 	}
@@ -183,6 +186,7 @@ public class WaypointService {
 	/**
 	 * extId로 장소를 다시 찾는다.
 	 * - `ra:000048`: 우리 휴게소
+	 * - `pl:{id}`: 우리 공영주차장 (parking.suggest 목록). 목적지를 주차장으로 바꾼다 (SET_DEST, way-on.md 3.6)
 	 * - `kk:{카카오 ID}`: 폰이 준 이름·좌표 근처를 카카오로 다시 검색해 같은 ID를 찾는다 (카카오에 ID 조회 API가 없음).
 	 *   휴게소 안 매장이면 그 휴게소로 바꿔서 넣는다 (도착 안내 A1이 휴게소 요청으로 동작하게)
 	 */
@@ -190,6 +194,10 @@ public class WaypointService {
 		String extId = place.get("extId") instanceof String s ? s : "";
 		if (extId.startsWith(RestAreaService.EXT_ID_PREFIX)) {
 			return restArea(RestAreaService.parseExtId(extId).orElseThrow(ApiException::placeNotFound));
+		}
+		if (extId.startsWith(ParkingService.EXT_ID_PREFIX)) {
+			var lot = parking.lot(extId).orElseThrow(ApiException::placeNotFound);
+			return new Place("PARKING", extId, lot.name(), lot.addr(), lot.lat().doubleValue(), lot.lng().doubleValue());
 		}
 		if (!extId.startsWith("kk:") || !(place.get("name") instanceof String name) || name.isBlank()
 				|| !(place.get("lat") instanceof Number lat) || !(place.get("lng") instanceof Number lng)) {

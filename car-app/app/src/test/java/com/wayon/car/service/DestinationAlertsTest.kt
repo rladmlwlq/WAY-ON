@@ -62,7 +62,7 @@ class DestinationAlertsTest {
     fun `목적지 10km 이하 또는 5분 이하가 처음 되면 주차장을 한 번 보낸다`() {
         assertTrue(alerts.update(busan(30_000, 1_200), fuel(null)).isEmpty())
         assertEquals(
-            listOf(Alert.ParkingNearDest(9_800, 840)),
+            listOf(Alert.ParkingNearDest("부산역", 9_800, 840)),
             alerts.update(busan(9_800, 840), fuel(null)),
         )
         assertTrue(alerts.update(busan(5_000, 200), fuel(null)).isEmpty())
@@ -71,7 +71,7 @@ class DestinationAlertsTest {
     @Test
     fun `남은 시간 5분 이하만으로도 보낸다`() {
         assertEquals(
-            listOf(Alert.ParkingNearDest(12_000, 290)),
+            listOf(Alert.ParkingNearDest("부산역", 12_000, 290)),
             alerts.update(busan(12_000, 290), fuel(null)),
         )
     }

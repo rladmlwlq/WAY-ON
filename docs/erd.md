@@ -281,13 +281,15 @@ erDiagram
 **근처 찾기 쿼리** (충전소·주차장 공통): 중심 좌표 ± 반경만큼의 사각형으로 `idx_*_lat_lng`를 먼저 타고, 남은 행만 실제 거리를 계산해 정렬합니다. 행 수가 수십만 이하라 공간 인덱스(SPATIAL)는 쓰지 않습니다.
 
 **`parking_lot` 적재 규칙**
+- 적재 코드: 서버 `com.wayon.seed.ParkingSeeder` (`parking-fetch`, `parking-load`). 결과는 `server/src/main/resources/db/seed/parking_lot.csv`로 git에 올림 (team-setup.md 3-4). 2026-11-13: 서울 724 + 전국 공영 17,045 = 17,769곳
+- 전국 데이터는 **공영만** 넣음 (민영 943곳 제외). 같은 `insttCode:prkplceNo`가 두 번 오는 행은 처음 것만
 - `source_key`: 전국은 `insttCode:prkplceNo` (번호만으로는 기관끼리 겹침), 서울은 `PKLT_CD`
 - 좌표가 없으면 카카오 주소 검색으로 채우고 `coord_source = GEOCODE`. 그래도 없으면 넣지 않음
 - 서울 노상 주차장은 한 코드에 구간별 행이 여러 개 → 첫 행 좌표 1개만 사용
 - 버스전용·거주자 전용 주차장은 넣지 않음 (서울 `OPER_SE_NM`)
 - 서울 중복: 서울시 데이터를 기준으로 하고, 전국 데이터의 서울 행은 **이름이 같고 100m 안**이면 버림
 - 서울 `GetParkInfo`는 토요일이 아니라 "주말" 시간이라 `sat_*`, `holiday_*` 칸에 주말·공휴일 값을 넣음
-- `fee_1h`: 무료면 0. 유료면 `basic_fee` + 남은 시간을 `add_min` 단위로 올림해 `add_fee`를 곱한 값, `day_max_fee`가 있으면 그 이하로. 값이 모자라 계산이 안 되면 NULL → "싼 순"에서 맨 뒤
+- `fee_1h`: 무료면 0. 유료면 `basic_fee` + 남은 시간을 `add_min` 단위로 올림해 `add_fee`를 곱한 값, `day_max_fee`가 있으면 그 이하로. 추가 요금이 비었거나 0이면 기본 단위가 반복된다고 봄 (서울 "5분 50원"처럼 기본만 적은 곳이 유료의 약 20%). 기본도 없으면 NULL → "싼 순"에서 맨 뒤. 전국 데이터는 1일권(`dayCmmtkt`)을 `day_max_fee`로 씀
 
 **휴게소 데이터 적재 규칙** (seed 만들 때 한 번, Top5만 매달)
 - 적재 코드: 서버 `com.wayon.seed` (`RestAreaSeeder`). 결과는 `server/src/main/resources/db/seed/*.csv`로 git에 올리고, 각자 로컬 DB에는 CSV로 넣습니다 (team-setup.md 3-3).

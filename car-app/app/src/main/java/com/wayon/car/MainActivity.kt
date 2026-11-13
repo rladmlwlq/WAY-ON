@@ -39,6 +39,7 @@ import com.wayon.car.ui.DepartureScreen
 import androidx.compose.material3.lightColorScheme
 import com.wayon.car.ui.Blue
 import com.wayon.car.ui.HomeScreen
+import com.wayon.car.ui.ParkingScreen
 import com.wayon.car.ui.PassengersScreen
 import com.wayon.car.ui.RequestScreen
 import androidx.compose.foundation.layout.Box
@@ -95,6 +96,9 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(state.parked) { if (!state.parked) managing = false }
                     // [←]로 대화에서 나온 출발 알림. 알림은 열린 채라 홈의 [대화 보기]로 다시 들어간다
                     var hiddenCallId by rememberSaveable { mutableStateOf<Long?>(null) }
+                    // 목적지 근처 주차장 목록 (6-6). 정차 중에만, 주행하면 닫는다
+                    var parkingOpen by remember { mutableStateOf(false) }
+                    LaunchedEffect(state.parked) { if (!state.parked) parkingOpen = false }
                     // 키패드가 올라오면 내용만 그만큼 위로 (배경은 키패드 뒤까지 그대로)
                     Box(Modifier.safeDrawingPadding()) {
                         Column {
@@ -112,6 +116,18 @@ class MainActivity : ComponentActivity() {
                                     onBack = { service?.closeQr() },
                                     onRenew = { service?.openQr() },
                                     onManage = { managing = true },
+                                )
+                                parkingOpen && state.parked && state.server.parking != null -> ParkingScreen(
+                                    state.server.parking!!,
+                                    onChoose = {
+                                        service?.chooseParking(it)
+                                        parkingOpen = false
+                                    },
+                                    onBack = { parkingOpen = false },
+                                    onClose = {
+                                        service?.closeParking()
+                                        parkingOpen = false
+                                    },
                                 )
                                 // 출발해요 대화는 정차 중에만 (기어 D면 서비스가 닫는다, 4-5)
                                 departure != null && state.parked &&
@@ -132,6 +148,7 @@ class MainActivity : ComponentActivity() {
                                         if (departure != null) hiddenCallId = null else service?.callDeparture()
                                     },
                                     onManage = { managing = true },
+                                    onParking = { parkingOpen = true },
                                 )
                             }
                         }
