@@ -34,8 +34,11 @@ fun HomeScreen(
     onDeparture: () -> Unit = {},
 ) {
     val arrived = state.restArea.arrived
-    // [출발해요]: 정차 중이고 알림을 받을 동승자가 1명 이상일 때 (출발해요 기획 7장)
-    val canDepart = state.parked && state.server.locationConsent && state.server.departureReceivers.isNotEmpty()
+    // [출발해요]: 정차 중이고 알림을 받을 동승자가 1명 이상일 때 (출발해요 기획 7장).
+    // 이미 열린 알림이 있으면(대화에서 [←]로 나온 경우) 같은 자리에 [대화 보기]
+    val waiting = state.server.departure != null
+    val canDepart = state.parked && state.server.locationConsent &&
+        (waiting || state.server.departureReceivers.isNotEmpty())
     // 도착은 내비 도착 콜백으로 달리는 중에도 생길 수 있다. 정차(기어 P, 주행 규제 없음)일 때만 지도를 연다
     val map = arrived?.map
     if (state.parked && map != null) {
@@ -48,7 +51,7 @@ fun HomeScreen(
                 Text("WAY:ON", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(map.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 // 휴게소 지도 위 [출발해요] (4-7)
-                if (canDepart) DepartureButton(onDeparture)
+                if (canDepart) DepartureButton(waiting, onDeparture)
             }
             RestAreaMapScreen(map, state.location, Modifier.weight(1f))
         }
@@ -81,7 +84,7 @@ fun HomeScreen(
                 ConsentCard(onConsent)
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if (canDepart) DepartureButton(onDeparture)
+                    if (canDepart) DepartureButton(waiting, onDeparture)
                     OutlinedButton(onClick = onOpenQr, modifier = Modifier.heightIn(min = 64.dp)) {
                         Text("동승자 연결", style = MaterialTheme.typography.titleLarge)
                     }
@@ -91,11 +94,15 @@ fun HomeScreen(
     }
 }
 
-/** 큰 버튼 하나 (출발해요 기획 6-1) */
+/** 큰 버튼 하나 (출발해요 기획 6-1). 열린 알림이 있으면 대화로 돌아가는 버튼 */
 @Composable
-private fun DepartureButton(onClick: () -> Unit) {
+private fun DepartureButton(waiting: Boolean, onClick: () -> Unit) {
     Button(onClick = onClick, modifier = Modifier.heightIn(min = 64.dp)) {
-        Text("🚗 출발해요", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(
+            if (waiting) "💬 출발 대기 중 · 대화 보기" else "🚗 출발해요",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 

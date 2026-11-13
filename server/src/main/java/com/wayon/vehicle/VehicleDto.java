@@ -39,6 +39,14 @@ public final class VehicleDto {
 	public record Sender(Long passengerId, String nickname) {
 	}
 
+	/** 2-6 */
+	public record Calls(List<Call> calls, boolean hasMore) {
+	}
+
+	public record Call(long callId, String status, String destName, Instant calledAt, Instant closedAt,
+			List<String> passengers) {
+	}
+
 	/** 3-1 */
 	public record ConnectRequest(String code, String nickname, Boolean locationConsent) {
 	}

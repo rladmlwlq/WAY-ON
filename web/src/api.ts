@@ -122,9 +122,9 @@ export interface DepartureCall {
   destName: string | null
 }
 
-/** 2-5 지난 대화 (최신이 마지막) */
-export function getDepartureMessages(token: string, before?: number) {
-  const query = before ? `?before=${before}` : ''
+/** 2-5 한 출발 알림의 대화 (최신이 마지막). [출발해요]마다 새 대화방 */
+export function getDepartureMessages(token: string, callId: number) {
+  const query = `?callId=${callId}&size=50`
   return request<{ messages: DepartureMessage[]; hasMore: boolean }>(`/api/vehicles/me/departure-messages${query}`, {
     headers: { Authorization: `Bearer ${token}` },
   })

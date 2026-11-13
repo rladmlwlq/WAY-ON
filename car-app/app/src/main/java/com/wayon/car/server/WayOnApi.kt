@@ -44,13 +44,20 @@ interface WayOnApi {
     @GET("api/vehicles/me/passengers")
     suspend fun passengers(@Header("Authorization") authorization: String): Passengers
 
-    /** 2-5 지난 대화 (최신이 마지막). 출발해요 대화 화면을 열 때 */
+    /** 2-5 한 출발 알림의 대화 (최신이 마지막). [출발해요]마다 새 대화방이라 callId로 */
     @GET("api/vehicles/me/departure-messages")
     suspend fun departureMessages(
         @Header("Authorization") authorization: String,
-        @Query("before") before: Long? = null,
-        @Query("size") size: Int? = null,
+        @Query("callId") callId: Long,
+        @Query("size") size: Int = 50,
     ): DepartureMessages
+
+    /** 2-6 지난 출발 알림 목록 (최신이 먼저). 대화 화면 [다시 알리기] 아래 카드 */
+    @GET("api/vehicles/me/departure-calls")
+    suspend fun departureCalls(
+        @Header("Authorization") authorization: String,
+        @Query("size") size: Int = 20,
+    ): DepartureCalls
 
     companion object {
         fun create(baseUrl: String = Config.SERVER_URL): WayOnApi {

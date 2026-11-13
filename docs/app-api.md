@@ -131,6 +131,20 @@ Response `200` (최신이 마지막)
  "hasMore": true}
 ```
 - `before`가 없으면 최신 것부터. 위로 올리면 가장 오래된 `messageId`를 `before`로 다시 부릅니다. `size` 최대 50.
+- `callId`를 주면 그 출발 알림의 대화만 줍니다. 차·폰 대화 화면은 [출발해요]마다 새 대화방이라 이번 알림의 `callId`로 부릅니다 (2026-11-09).
+
+### 2-6. `GET /api/vehicles/me/departure-calls?before={callId}&size=20` — 지난 출발 알림
+
+차량 토큰. 차 대화 화면 [다시 알리기] 아래 카드 목록. 끝난 알림만(OPEN 제외), 최신이 먼저, 30일 안.
+```json
+{"calls": [
+  {"callId": 40, "status": "DEPARTED", "destName": "부산역",
+   "calledAt": "2026-11-09T05:00:00.000Z", "closedAt": "2026-11-09T05:12:00.000Z",
+   "passengers": ["민지", "준호"]}
+ ],
+ "hasMore": false}
+```
+- `passengers`: 그 알림을 누른 세션에 있던 동승자 닉네임. 카드를 누르면 2-5에 `callId`를 넣어 그 대화를 봅니다.
 - 보낸 지 30일 지난 메시지는 없습니다 (하루 1번 삭제).
 
 ---

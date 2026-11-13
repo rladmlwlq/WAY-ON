@@ -349,13 +349,44 @@ class WayOnService : LifecycleService() {
     }
 
     /** 2-5 지난 대화. 그사이 실시간으로 온 메시지와 합친다 */
+    /**
+     * 2-5 이번 알림의 대화만 ([출발해요]마다 새 대화방). 그사이 실시간으로 온 메시지와 합친다.
+     * 2-6 지난 출발 알림 카드도 같이 받는다
+     */
     private fun loadDepartureMessages(callId: Long) {
         val token = carToken ?: return
         lifecycleScope.launch {
-            runCatching { api.departureMessages(WayOnApi.bearer(token)) }
+            runCatching { api.departureMessages(WayOnApi.bearer(token), callId) }
                 .onSuccess { res -> updateDeparture(callId) { it.copy(messages = mergeMessages(res.messages, it.messages)) } }
-                .onFailure { log("지난 대화 실패: ${it.message}") }
+                .onFailure { log("대화 불러오기 실패: ${it.message}") }
+            runCatching { api.departureCalls(WayOnApi.bearer(token)) }
+                .onSuccess { res -> updateDeparture(callId) { it.copy(pastCalls = res.calls) } }
+                .onFailure { log("지난 출발 알림 실패: ${it.message}") }
         }
+    }
+
+    /** 지난 출발 알림 카드를 눌러 그 대화를 본다 (읽기 전용) */
+    fun openPastDeparture(group: PastGroup) {
+        val callId = serverUi.value.departure?.callId ?: return
+        val token = carToken ?: return
+        updateDeparture(callId) { it.copy(viewing = PastChat(group)) }
+        lifecycleScope.launch {
+            // 묶음 안의 알림마다 대화를 받아 시간순으로 이어 붙인다
+            val result = runCatching {
+                group.calls.flatMap { api.departureMessages(WayOnApi.bearer(token), it.callId).messages }
+                    .sortedBy { it.messageId }
+            }
+            updateDeparture(callId) { d ->
+                if (d.viewing?.group?.key != group.key) d
+                else d.copy(viewing = PastChat(group, result.getOrNull(), failed = result.isFailure))
+            }
+        }
+    }
+
+    /** 지난 대화에서 [←] → 이번 대화로 */
+    fun closePastDeparture() {
+        val callId = serverUi.value.departure?.callId ?: return
+        updateDeparture(callId) { it.copy(viewing = null) }
     }
 
     private fun sendDepartureMessage(data: Map<String, Any>) {

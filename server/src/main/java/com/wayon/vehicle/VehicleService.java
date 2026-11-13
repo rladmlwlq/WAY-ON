@@ -127,20 +127,41 @@ public class VehicleService {
 				.toList());
 	}
 
-	/** 2-5. 차량·동승자 토큰 공용. 최신이 마지막 */
-	public VehicleDto.Messages select_departureMessages(String authorization, Long before, Integer size) {
+	/**
+	 * 2-5. 차량·동승자 토큰 공용. 최신이 마지막. callId가 있으면 그 출발 알림의 대화만
+	 * ([출발해요]마다 새 대화방, 2026-11-09)
+	 */
+	public VehicleDto.Messages select_departureMessages(String authorization, Long before, Integer size,
+			Long callId) {
 		long vehicleId = isPassengerToken(authorization) ? requirePassenger(authorization).vehicleId()
 				: requireCar(authorization);
 		int limit = size == null ? DEFAULT_MESSAGES : Math.clamp(size, 1, MAX_MESSAGES);
 		// 하루 1번 삭제 배치가 돌기 전에도 30일 지난 메시지는 주지 않는다
 		List<VehicleRows.Message> rows = new ArrayList<>(
-				mapper.select_departureMessages(vehicleId, before, limit + 1, now().minus(MESSAGE_TTL)));
+				mapper.select_departureMessages(vehicleId, before, limit + 1, now().minus(MESSAGE_TTL), callId));
 		boolean hasMore = rows.size() > limit;
 		if (hasMore) {
 			rows.remove(limit);
 		}
 		Collections.reverse(rows);
 		return new VehicleDto.Messages(rows.stream().map(VehicleService::toMessage).toList(), hasMore);
+	}
+
+	/** 2-6. 끝난 출발 알림 (최신이 먼저). 30일 지난 것은 대화가 지워져서 빼고, 동승자는 그 세션에 있던 사람 */
+	public VehicleDto.Calls select_departureCalls(String authorization, Long before, Integer size) {
+		long vehicleId = requireCar(authorization);
+		int limit = size == null ? DEFAULT_MESSAGES : Math.clamp(size, 1, MAX_MESSAGES);
+		List<VehicleRows.Call> rows = new ArrayList<>(
+				mapper.select_departureCalls(vehicleId, before, limit + 1, now().minus(MESSAGE_TTL)));
+		boolean hasMore = rows.size() > limit;
+		if (hasMore) {
+			rows.remove(limit);
+		}
+		return new VehicleDto.Calls(rows.stream()
+				.map(c -> new VehicleDto.Call(c.id(), c.status(), c.destName(), toInstant(c.calledAt()),
+						toInstant(c.closedAt()),
+						c.nicknames() == null ? List.of() : List.of(c.nicknames().split(","))))
+				.toList(), hasMore);
 	}
 
 	/**
