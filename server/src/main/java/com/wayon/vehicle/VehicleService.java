@@ -201,6 +201,11 @@ public class VehicleService {
 	}
 
 	/** 3-2 */
+	/** 동승자 토큰으로 그 차량 ID (검색처럼 차 위치가 필요한 폰 API용) */
+	public long select_passengerVehicleId(String authorization) {
+		return requirePassenger(authorization).vehicleId();
+	}
+
 	public VehicleDto.Me select_passengerMe(String authorization) {
 		VehicleRows.Passenger p = requirePassenger(authorization);
 		return new VehicleDto.Me(p.id(), p.nickname(), p.pushEndpoint() != null,

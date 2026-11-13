@@ -14,6 +14,7 @@ import com.wayon.car.server.Trip
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import com.wayon.car.server.WaypointRequest
 
 /**
  * 화면이 읽는 상태 한 덩어리 (car-app-design.md 2-2, 3장). 서비스 안에서만 바뀐다.
@@ -51,6 +52,8 @@ data class ServerUi(
     val notice: String? = null,
     /** 열린 출발 알림 (출발해요 대화, 4-5). 없으면 null */
     val departure: DepartureUi? = null,
+    /** 경유지 요청 수락 화면 (4-3). 없으면 null. 어느 화면이든 그 위에, 주행 중에도 뜬다 */
+    val request: RequestUi? = null,
 ) {
     val onlinePassengers: List<Passenger> get() = passengers.filter { it.online }
     val passengersFull: Boolean get() = passengers.size >= Config.MAX_PASSENGERS
@@ -102,6 +105,25 @@ internal fun groupPastCalls(calls: List<PastCall>): List<PastGroup> =
         runCatching { Instant.parse(c.calledAt).atZone(SEOUL).toLocalDate() }.getOrDefault(LocalDate.MIN) to
             c.passengers.sorted()
     }.map { (k, list) -> PastGroup(k.first, k.second, list) }
+
+/** 수락 화면 1건 (car-app-design.md 6-4 `pendingRequest`) */
+data class RequestUi(
+    val request: WaypointRequest,
+    /** 기기 시각(ms) 기준 수락 마감 */
+    val expiresAtMs: Long,
+    val phase: Phase = Phase.SHOWING,
+) {
+    enum class Phase {
+        /** 버튼을 누를 수 있음 */
+        SHOWING,
+        /** [추가] 뒤 서버 선점(ack) 기다림. 버튼 잠금 */
+        CLAIMING,
+        /** 내비에 넣는 중 (성공 콜백 기다림, 최대 60초) */
+        APPLYING,
+        /** "추가하지 못했어요" 3초 */
+        FAILED,
+    }
+}
 
 /** QR 화면 (4-2). url이 null이면 받는 중이거나 실패([error]) */
 data class QrUi(

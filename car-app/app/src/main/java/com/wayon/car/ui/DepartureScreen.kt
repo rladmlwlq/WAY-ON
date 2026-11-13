@@ -385,7 +385,5 @@ private fun minutesSince(ms: Long) = maxOf(0L, (System.currentTimeMillis() - ms)
 
 private fun secondsLeft(untilMs: Long) = maxOf(0L, (untilMs - System.currentTimeMillis() + 999) / 1_000).toInt()
 
-private val Navy = Color(0xFF14213D)
-private val Blue = Color(0xFF2B6CF6)
-private val Gray = Color(0xFF6B7280)
+// Navy·Blue·Gray는 QrScreen.kt의 동승자 화면 공통 색 (같은 값)
 private val Bg = Color(0xFFF7F9FC)

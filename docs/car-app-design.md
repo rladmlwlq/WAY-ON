@@ -318,7 +318,8 @@ classDiagram
 ```
 
 - `waypoint.request`가 오면 어느 화면이든 그 위에 띄웁니다. 주행 중에도 띄우는 유일한 화면입니다.
-- 남은 시간은 `expiresAt` 기준으로 줄어듭니다. 0이 되면 서버의 `waypoint.expired`를 기다리지 않고 닫습니다.
+- ~~남은 시간은 `expiresAt` 기준으로 줄어듭니다. 0이 되면 서버의 `waypoint.expired`를 기다리지 않고 닫습니다.~~
+- **바뀜 (2026-11-09): 그대로 두면 자동으로 추가합니다.** 남은 시간 아래에 "그대로 두면 N초 뒤 자동으로 경유지를 추가해요"(목적지면 "목적지를 바꿔요")를 보여 주고, 10초가 되면 [추가]를 누른 것과 같이 `waypoint.accept`를 보냅니다. 운전자는 원치 않을 때만 [거절]을 누릅니다. 서버 마감은 15초 (app-api.md 5-10)
 - `action`별 문구:
   - `ADD`: "경유지로 추가할까요?"
   - `SET_DEST`: "목적지를 ○○로 바꿀까요?" (주차장, 또는 목적지가 없을 때)
@@ -587,7 +588,8 @@ stateDiagram-v2
     [*] --> 표시중 : waypoint.request
     표시중 --> 표시중 : 새 waypoint.request (내용 바꾸고 10초 다시)
     표시중 --> 선점대기 : [추가] → waypoint.accept
-    표시중 --> 닫힘 : [거절] / 10초 / waypoint.expired / 끊김
+    표시중 --> 선점대기 : 10초 지남 → 자동 waypoint.accept (2026-11-09)
+    표시중 --> 닫힘 : [거절] / waypoint.expired / 끊김
     선점대기 --> 내비호출 : ack
     선점대기 --> 닫힘 : error REQUEST_EXPIRED / 끊김
     내비호출 --> 닫힘 : onWaypointChanged(ADD) / onRouteStarted → result ok

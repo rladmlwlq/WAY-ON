@@ -171,7 +171,6 @@ server/src/main/resources/
 ### 4-5. 외부 API 키
 1. 팀에서 공유받은 키 파일을 **`server/.env`** 로 저장합니다 (파일 이름이 정확히 `.env`)
 2. 들어 있는 키: `EX_API_KEY`, `DATA_GO_KR_KEY`, `OPINET_KEY`, `KAKAO_REST_KEY`, `KAKAO_JS_KEY`, `SEOUL_DATA_KEY`. 규격은 `docs/api.md`
-
 > 서버는 시작할 때 `server` 폴더의 이 파일을 읽습니다 (`application.properties`의 `spring.config.import`).
 
 ### 4-6. 폰 웹 연동 (구현할 때 추가)

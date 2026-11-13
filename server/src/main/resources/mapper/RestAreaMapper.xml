@@ -10,6 +10,12 @@
 		<foreach collection="codes" item="c" open="(" separator="," close=")">#{c}</foreach>
 	</sql>
 
+	<select id="findByKakaoIds" resultType="com.wayon.restarea.RestAreaRows$KakaoMatch">
+		SELECT kakao_id, std_rest_cd
+		FROM rest_area_place
+		WHERE kakao_id IN <include refid="inCodes"/>
+	</select>
+
 	<select id="findByCode" resultType="com.wayon.restarea.RestAreaRows$RestArea">
 		SELECT <include refid="restAreaColumns"/>
 		FROM rest_area
