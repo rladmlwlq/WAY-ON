@@ -30,7 +30,7 @@ export type SocketState =
 /** 출발해요 대화 화면 상태. closed가 있으면 끝난 알림(입력 잠김) */
 export interface Departure extends DepartureCall {
   people: DeparturePerson[]
-  /** 지난 대화 + 이번 대화 (최신이 마지막) */
+  /** 이번 출발 알림의 대화 (최신이 마지막). [출발해요]마다 새 대화방 */
   messages: DepartureMessage[]
   closed: 'DEPARTED' | 'CANCELLED' | 'EXPIRED' | null
   /** 보내기 실패 문구 (조금 뒤 사라짐) */
@@ -128,7 +128,7 @@ export function useTripSocket(token: string): TripSocket {
     let retryMs = 1000
     const stopped = { current: false }
 
-    // 대화 화면을 열 때 지난 대화를 불러오고, 그사이 실시간으로 온 메시지와 합친다
+    // 대화 화면을 열 때 이번 알림의 대화를 불러오고, 그사이 실시간으로 온 메시지와 합친다 ([출발해요]마다 새 대화방)
     const openDeparture = (call: DepartureCall, people: DeparturePerson[]) => {
       setDeparture((prev) => ({
         ...call,
@@ -137,7 +137,7 @@ export function useTripSocket(token: string): TripSocket {
         closed: null,
         error: null,
       }))
-      getDepartureMessages(token)
+      getDepartureMessages(token, call.callId)
         .then(({ messages }) =>
           setDeparture((prev) => (prev && prev.callId === call.callId ? { ...prev, messages: merge(messages, prev.messages) } : prev)),
         )
@@ -213,7 +213,11 @@ export function useTripSocket(token: string): TripSocket {
             )
             break
           case 'departure.message':
-            setDeparture((prev) => (prev ? { ...prev, messages: merge(prev.messages, [d as unknown as DepartureMessage]) } : prev))
+            setDeparture((prev) =>
+              prev && prev.callId === d.callId
+                ? { ...prev, messages: merge(prev.messages, [d as unknown as DepartureMessage]) }
+                : prev,
+            )
             break
           case 'departure.closed':
             setDeparture((prev) =>

@@ -97,7 +97,20 @@
 		WHERE c.vehicle_id = #{vehicleId}
 			AND m.sent_at &gt;= #{since}
 			<if test="before != null">AND m.id &lt; #{before}</if>
+			<if test="callId != null">AND m.call_id = #{callId}</if>
 		ORDER BY m.id DESC
+		LIMIT #{limit}
+	</select>
+
+	<select id="select_departureCalls" resultType="com.wayon.vehicle.VehicleRows$Call">
+		SELECT c.id, c.status, c.dest_name, c.called_at, c.closed_at,
+			(SELECT GROUP_CONCAT(p.nickname ORDER BY p.id SEPARATOR ',')
+				FROM trip_passenger tp JOIN passenger p ON p.id = tp.passenger_id
+				WHERE tp.trip_id = c.trip_id) AS nicknames
+		FROM departure_call c
+		WHERE c.vehicle_id = #{vehicleId} AND c.status &lt;&gt; 'OPEN' AND c.called_at &gt;= #{since}
+			<if test="before != null">AND c.id &lt; #{before}</if>
+		ORDER BY c.id DESC
 		LIMIT #{limit}
 	</select>
 </mapper>

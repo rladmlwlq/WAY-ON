@@ -9,7 +9,11 @@ import com.wayon.car.car.UxRestrictions
 import com.wayon.car.server.DepartureMessage
 import com.wayon.car.server.DeparturePerson
 import com.wayon.car.server.Passenger
+import com.wayon.car.server.PastCall
 import com.wayon.car.server.Trip
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import com.wayon.car.server.WaypointRequest
 
 /**
@@ -76,7 +80,32 @@ data class DepartureUi(
     val remindLockedUntilMs: Long = 0,
     /** 보내기 실패 문구 (3초 뒤 지움) */
     val error: String? = null,
-)
+    /** 지난 출발 알림 카드 (최신이 먼저). [다시 알리기] 아래 */
+    val pastCalls: List<PastCall> = emptyList(),
+    /** 카드를 눌러 보고 있는 지난 대화. null이면 이번 대화 */
+    val viewing: PastChat? = null,
+) {
+    /** 카드: 같은 날짜 + 같은 동승자면 하나로 (최근 것이 위). 목적지는 같은 날 여행 중에도 바뀌니 묶음 기준이 아님 */
+    val pastGroups: List<PastGroup> get() = groupPastCalls(pastCalls)
+}
+
+/** 지난 출발 알림 카드 1장. calls는 최신이 먼저 */
+data class PastGroup(val day: LocalDate, val passengers: List<String>, val calls: List<PastCall>) {
+    val key: String get() = "$day|${passengers.joinToString(",")}"
+}
+
+/** 지난 출발 알림 묶음의 대화 (읽기 전용, 알림 순서대로 이어 붙임). messages가 null이면 불러오는 중 */
+data class PastChat(val group: PastGroup, val messages: List<DepartureMessage>? = null, val failed: Boolean = false)
+
+private val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
+
+/** 날짜(한국 시간)·동승자(이름순)가 같으면 한 카드. 입력이 최신순이면 결과도 최신 카드가 먼저 */
+internal fun groupPastCalls(calls: List<PastCall>): List<PastGroup> =
+    calls.groupBy { c ->
+        runCatching { Instant.parse(c.calledAt).atZone(SEOUL).toLocalDate() }.getOrDefault(LocalDate.MIN) to
+            c.passengers.sorted()
+    }.map { (k, list) -> PastGroup(k.first, k.second, list) }
+
 /** 수락 화면 1건 (car-app-design.md 6-4 `pendingRequest`) */
 data class RequestUi(
     val request: WaypointRequest,

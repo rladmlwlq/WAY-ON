@@ -384,6 +384,25 @@ fieldset:disabled {
   color: var(--muted);
 }
 
+/* 말풍선 옆 시간 (카톡처럼 바깥 아래쪽) */
+.bubble .line {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.bubble.mine .line {
+  flex-direction: row-reverse;
+}
+
+.bubble .line time {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 /* 차 위치·경로 지도 (TripMap) */
 .trip-map {
   width: 100%;
