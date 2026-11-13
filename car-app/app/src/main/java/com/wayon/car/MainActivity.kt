@@ -122,8 +122,6 @@ class MainActivity : ComponentActivity() {
                                     onRemind = { service?.remindDeparture() },
                                     onCancel = { service?.cancelDeparture() },
                                     onBack = { hiddenCallId = departure.callId },
-                                    onOpenPast = { service?.openPastDeparture(it) },
-                                    onClosePast = { service?.closePastDeparture() },
                                 )
                                 else -> HomeScreen(
                                     state,

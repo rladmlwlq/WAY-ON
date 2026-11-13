@@ -60,11 +60,4 @@ public class VehicleController {
 		return service.select_departureMessages(authorization, before, size, callId);
 	}
 
-	/** 2-6. 지난 출발 알림 목록 (차 대화 화면의 카드 목록) */
-	@GetMapping("/me/departure-calls")
-	public VehicleDto.Calls select_departureCalls(
-			@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
-			@RequestParam(required = false) Long before, @RequestParam(required = false) Integer size) {
-		return service.select_departureCalls(authorization, before, size);
-	}
 }

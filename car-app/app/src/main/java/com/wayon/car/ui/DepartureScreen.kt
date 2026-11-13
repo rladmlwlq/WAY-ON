@@ -1,20 +1,17 @@
 package com.wayon.car.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -37,20 +34,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wayon.car.Config
 import com.wayon.car.server.DepartureMessage
 import com.wayon.car.server.DeparturePerson
-import com.wayon.car.server.PastCall
 import com.wayon.car.service.DepartureUi
-import com.wayon.car.service.PastChat
-import com.wayon.car.service.PastGroup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.time.Instant
@@ -64,6 +58,8 @@ import java.util.Locale
  * 아래: [천천히 와요] [빨리 와요], 40자 메시지, [다시 알리기] (1분에 1번), [취소]. [←]는 알림을 열어 둔 채 홈으로.
  * 말풍선 옆 시간과 이름은 카톡처럼 같은 사람·같은 분 묶음에서 시간은 마지막, 이름은 처음에만. 날짜가 바뀌면 날짜 줄.
  * 넓은 창이면 대화와 버튼을 좌우로, 좁은 창(보조 창)이면 위아래로 놓는다.
+ * 넓은지는 키패드와 상관없는 창 크기로 정한다. 남은 칸으로 정하면 보조 창에서 키패드가 올라올 때
+ * 좌우 배치로 바뀌면서 입력칸이 새로 만들어져 키패드가 바로 닫힌다 (2026-11-13 에뮬레이터)
  */
 @Composable
 fun DepartureScreen(
@@ -73,104 +69,26 @@ fun DepartureScreen(
     onRemind: () -> Unit,
     onCancel: () -> Unit,
     onBack: () -> Unit,
-    onOpenPast: (PastGroup) -> Unit,
-    onClosePast: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BoxWithConstraints(modifier.fillMaxSize().background(Bg).padding(24.dp)) {
-        val wide = maxWidth > maxHeight
-        val past = departure.viewing
-        if (past != null) {
-            PastChatView(past, onClosePast)
-            return@BoxWithConstraints
-        }
+    val window = LocalConfiguration.current
+    val wide = window.screenWidthDp > window.screenHeightDp
+    Box(modifier.fillMaxSize().background(Bg).padding(24.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Header(departure, onCancel, onBack)
             People(departure.people)
             if (wide) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     Bubbles(departure.messages, Modifier.weight(1f).fillMaxSize())
-                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Controls(departure, onQuick, onText, onRemind, Modifier.fillMaxWidth())
-                        PastCalls(departure.pastGroups, onOpenPast, Modifier.weight(1f))
-                    }
+                    Controls(departure, onQuick, onText, onRemind, Modifier.weight(1f))
                 }
             } else {
                 Bubbles(departure.messages, Modifier.weight(1f).fillMaxWidth())
                 Controls(departure, onQuick, onText, onRemind, Modifier.fillMaxWidth())
-                PastCalls(departure.pastGroups, onOpenPast, Modifier.heightIn(max = 220.dp))
             }
         }
     }
 }
-
-/**
- * 지난 출발 알림 카드 (최근 것이 위). 같은 날짜 + 같은 동승자면 한 장, 한 줄:
- * "11월 9일 (일) · 민지, 의집 · 3번". 누르면 그날 그 사람들과의 대화를 이어서 본다
- */
-@Composable
-private fun PastCalls(groups: List<PastGroup>, onOpen: (PastGroup) -> Unit, modifier: Modifier) {
-    if (groups.isEmpty()) return
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("지난 출발 알림", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Gray)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(groups, key = { it.key }) { g ->
-                Text(
-                    groupTitle(g),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Navy,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.White, RoundedCornerShape(12.dp))
-                        .clickable { onOpen(g) }
-                        .heightIn(min = 64.dp)
-                        .padding(horizontal = 16.dp, vertical = 18.dp),
-                )
-            }
-        }
-    }
-}
-
-/** 지난 출발 알림 묶음의 대화 (읽기 전용). 알림 사이에 "출발 알림 · 오후 2:40 · 부산역". [←]로 이번 대화로 */
-@Composable
-private fun PastChatView(past: PastChat, onBack: () -> Unit) {
-    val calls = past.group.calls.associateBy { it.callId }
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("←", fontSize = 28.sp, color = Navy) }
-            Text("지난 출발 알림 · " + groupTitle(past.group), fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Navy)
-        }
-        when {
-            past.messages == null && past.failed -> Text("대화를 불러오지 못했어요", fontSize = 20.sp, color = Gray)
-            past.messages == null -> Text("불러오는 중…", fontSize = 20.sp, color = Gray)
-            past.messages.isEmpty() -> Text("주고받은 대화가 없어요", fontSize = 20.sp, color = Gray)
-            else -> Bubbles(
-                past.messages,
-                Modifier.weight(1f).fillMaxWidth(),
-                callLabel = { id -> calls[id]?.let(::callLabel) ?: "출발 알림" },
-                labelFirst = true,
-            )
-        }
-    }
-}
-
-private val DAY = DateTimeFormatter.ofPattern("M월 d일 (E)", Locale.KOREAN)
-
-/** "11월 9일 (일) · 민지, 의집 · 3번" */
-private fun groupTitle(g: PastGroup): String =
-    DAY.format(g.day) + " · " + (if (g.passengers.isEmpty()) "동승자 없음" else g.passengers.joinToString(", ")) +
-        " · ${g.calls.size}번"
-
-/** "출발 알림 · 오후 2:40 · 부산역 · 출발함" */
-private fun callLabel(c: PastCall): String {
-    val at = runCatching { Instant.parse(c.calledAt).toEpochMilli() }.getOrNull()
-    return listOfNotNull("출발 알림", at?.let(::timeText), c.destName, CLOSED[c.status]).joinToString(" · ")
-}
-
-private val CLOSED = mapOf("DEPARTED" to "출발함", "CANCELLED" to "취소함", "EXPIRED" to "30분 지나 끝남")
 
 @Composable
 private fun Header(d: DepartureUi, onCancel: () -> Unit, onBack: () -> Unit) {
@@ -219,10 +137,6 @@ private fun People(people: List<DeparturePerson>) {
 private fun Bubbles(
     messages: List<DepartureMessage>,
     modifier: Modifier,
-    /** 알림이 바뀌는 자리에 넣을 줄. null이면 넣지 않음 (이번 대화는 알림 1건뿐) */
-    callLabel: ((Long) -> String)? = null,
-    /** 첫 메시지 앞에도 알림 줄 */
-    labelFirst: Boolean = false,
 ) {
     val list = rememberLazyListState()
     // 새 말풍선이 오면 맨 아래로
@@ -240,9 +154,8 @@ private fun Bubbles(
             val driver = m.sender.passengerId == null
             val prev = messages.getOrNull(i - 1)
             val next = messages.getOrNull(i + 1)
-            // 날짜가 바뀌면 날짜 줄, 출발 알림이 바뀌면 그 알림 줄 (지난 대화 묶음에서)
+            // 날짜가 바뀌면 날짜 줄
             if (prev == null || dayKey(prev) != dayKey(m)) Divider(dateText(m))
-            if (callLabel != null && (if (prev == null) labelFirst else prev.callId != m.callId)) Divider(callLabel(m.callId))
             // 카톡처럼: 같은 사람이 같은 분에 이어 보낸 묶음에서 이름은 처음, 시간은 마지막에만
             val showName = !driver && (prev == null || !sameGroup(prev, m))
             val showTime = next == null || !sameGroup(m, next)
