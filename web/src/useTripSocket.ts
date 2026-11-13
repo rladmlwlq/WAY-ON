@@ -95,6 +95,28 @@ export interface ParkingSuggest {
   places: ParkingPlace[]
 }
 
+/** 7장 energy.suggest의 장소 1곳 (충전소: 카카오, 주유소: 오피넷) */
+export interface EnergyPlace {
+  type: 'EV_CHARGER' | 'GAS_STATION'
+  extId: string
+  name: string
+  address: string | null
+  lat: number
+  lng: number
+  /** 차에서 직선거리 */
+  distM: number
+  /** 충전소 {category, phone}, 주유소 {brand, gasoline(원/L)} */
+  detail: { category?: string; phone?: string | null; brand?: string; gasoline?: number }
+}
+
+/** 에너지 제안 (F6): 주행 가능 거리가 목적지까지 남은 거리 + 20km보다 짧을 때 한 번 */
+export interface EnergySuggest {
+  energyType: 'EV' | 'FUEL'
+  rangeM: number
+  remainDistM: number | null
+  places: EnergyPlace[]
+}
+
 /** 7장 waypoint.status */
 export interface WaypointStatus {
   requestId: number
@@ -127,6 +149,9 @@ export type TripSocket = SocketState & {
   route: RouteUpdate | null
   /** 마지막 경유지 요청 상태 (누가 보냈든 모두에게 옴) */
   waypointStatus: WaypointStatus | null
+  /** 에너지 제안. 닫거나 세션이 끝나면 null */
+  energy: EnergySuggest | null
+  dismissEnergy: () => void
   /** 목적지 근처 주차장 제안. 닫거나 세션이 끝나면 null */
   parking: ParkingSuggest | null
   dismissParking: () => void
@@ -147,6 +172,7 @@ export function useTripSocket(token: string): TripSocket {
   const [route, setRoute] = useState<RouteUpdate | null>(null)
   const [waypointStatus, setWaypointStatus] = useState<WaypointStatus | null>(null)
   const [parking, setParking] = useState<ParkingSuggest | null>(null)
+  const [energy, setEnergy] = useState<EnergySuggest | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   // reqId를 붙여 보낸 요청(경유지 제안)의 ack/error를 찾는다 (4-2)
   const pending = useRef(new Map<string, { resolve: (data: unknown) => void; reject: (err: ApiError) => void }>())
@@ -216,6 +242,7 @@ export function useTripSocket(token: string): TripSocket {
             setCarState(null)
             setRoute(null)
             setParking(null)
+            setEnergy(null)
             break
           case 'trip.state':
             setCarState(d as unknown as CarState)
@@ -226,6 +253,9 @@ export function useTripSocket(token: string): TripSocket {
             setRoute((prev) => (prev && prev.routeVersion === next.routeVersion ? prev : next))
             break
           }
+          case 'energy.suggest':
+            setEnergy(d as unknown as EnergySuggest)
+            break
           case 'parking.suggest':
             setParking(d as unknown as ParkingSuggest)
             break
@@ -306,6 +336,7 @@ export function useTripSocket(token: string): TripSocket {
 
   const dismissDeparture = useCallback(() => setDeparture(null), [])
   const dismissParking = useCallback(() => setParking(null), [])
+  const dismissEnergy = useCallback(() => setEnergy(null), [])
 
   const propose = useCallback((place: ProposePlace) => {
     return new Promise<{ requestId: number }>((resolve, reject) => {
@@ -323,7 +354,7 @@ export function useTripSocket(token: string): TripSocket {
     })
   }, [])
 
-  return { ...state, restArea, departure, myPassengerId, send, dismissDeparture, carState, route, waypointStatus, parking, dismissParking, propose }
+  return { ...state, restArea, departure, myPassengerId, send, dismissDeparture, carState, route, waypointStatus, parking, dismissParking, energy, dismissEnergy, propose }
 }
 
 /** messageId로 겹친 것을 빼고 순서대로 */

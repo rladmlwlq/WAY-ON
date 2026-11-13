@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiError, getMe, type Me, type SearchPlace } from './api'
 import { DepartureChat } from './DepartureChat'
+import { EnergyCard } from './EnergyCard'
 import { Notice } from './Notice'
 import { ParkingCard } from './ParkingCard'
 import { PushToggle } from './PushToggle'
@@ -64,6 +65,8 @@ export function TripScreen({ token, onSignedOut }: Props) {
         )}
 
         {socket.restArea && <RestAreaCard info={socket.restArea} />}
+
+        {socket.energy && <EnergyCard suggest={socket.energy} propose={socket.propose} onClose={socket.dismissEnergy} />}
 
         {socket.parking && (
           <ParkingCard suggest={socket.parking} propose={socket.propose} onClose={socket.dismissParking} />

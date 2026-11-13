@@ -418,6 +418,9 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 ```
 서버 동작: 경로 위에서 `rangeM` 안에 있는 주유소(연료) 또는 충전소(전기)를 찾아 `energy.suggest`를 보냅니다. 동승자가 있으면 폰들에게, 없으면 차량 앱에게 (정차 중 화면용). `trip.low_energy_alerted_at`을 채웁니다.
 
+> **구현 (2026-11-13)**: `energyType`은 `EV` | `FUEL`. 찾는 지점은 차 위치 + 경로선(7-1)에서 차와 가장 가까운 점부터 앞으로 5km마다, 주행 가능 거리 안에서 최대 4곳. 충전소는 지점마다 **카카오 키워드 "전기차충전소"**(반경 3km, 분류에 "충전"이 있는 것만, `extId` `kk:{id}`), 주유소는 **오피넷 `aroundAll`**(반경 5km, 보통휘발유 가격, `extId` `opinet:{UNI_ID}`). 같은 지점은 10분 캐시(오피넷 하루 300건). 합친 뒤 차에서 직선거리 `rangeM` 안만 가까운 순 15곳. 충전소 DB 동기화(`ev_station`)는 쓰지 않음 (사용 가능 대수 없음). `trip.low_energy_alerted_at`은 아직 안 채움
+> - 폰이 고르면 6-1 `waypoint.propose`로 경유지(ADD). `opinet:`은 서버가 보낸 값을 기억해 두었다가 찾고, `kk:` 충전소는 종류를 `EV_CHARGER`로 저장
+
 ### 5-8. `parking.near-dest` — 목적지 근처 (N5)
 
 **판단은 차량 앱**: 목적지 남은 거리 10km 이하 또는 남은 시간 5분 이하, 목적지 1개당 1번.
@@ -517,7 +520,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 | `waypoint.request` | 차 | 아래 7-2 |
 | `waypoint.expired` | 차 | `{"requestId": 88}` 10초 초과 또는 새 요청이 와서 밀림 → 수락 화면 닫기 |
 | `waypoint.status` | 폰 | `{"requestId": 88, "status": "APPLIED", "failReason": null, "requestedBy": "민지", "placeName": "경산(서울)휴게소", "action": "ADD"}` 상태가 바뀔 때마다. 모든 동승자에게 |
-| `energy.suggest` | 폰 (없으면 차) | `{"energyType", "rangeM", "remainDistM", "places": [3-6의 place …]}` |
+| `energy.suggest` | 폰 (없으면 차) | `{"energyType": "EV", "rangeM", "remainDistM", "places": [{"type": "EV_CHARGER" | "GAS_STATION", "extId", "name", "address", "lat", "lng", "distM", "detail"}]}`. `detail`: 충전소 `{"category", "phone"}`, 주유소 `{"brand", "gasoline"}`(원/L). `distM`은 차에서 직선거리 (5-7 구현) |
 | `parking.suggest` | 폰 (없으면 차) | 가까운 순으로 보냄. 폰에서 **가까운 순 / 싼 순**(`fee1h`, NULL은 맨 뒤)을 바꿔 봄 (way-on.md 8.1). `{"destName", "places": [{"extId": "pl:5120", "name", "address", "lat", "lng", "distM", "fee1h", "feeType", "basicMin", "basicFee", "totalSpaces", "nowParked", "openNow", "phone"}]}`. `fee1h`: 1시간 요금(무료 0, 모름 null). 추가 요금이 비어 있으면 기본 단위가 반복된다고 보고 계산 (erd.md). `openNow`: 한국 시간 평일·토·일 시간으로, 공휴일 달력은 안 봄, 모르면 null |
 | `restarea.info` | 폰 | `{"phase": "APPROACH" \| "ARRIVED" \| "LEFT", "restArea": 3-7 응답과 같은 모양}` (`LEFT`는 `restArea` 없이 닫기만) |
 | `departure.called` | 폰 (+ Web Push) | `{"callId": 40, "calledAt", "etaS", "destName", "nextRestAreaM"}` |

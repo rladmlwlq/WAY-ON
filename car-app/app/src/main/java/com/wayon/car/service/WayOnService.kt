@@ -14,12 +14,14 @@ import androidx.lifecycle.lifecycleScope
 import com.wayon.car.BuildConfig
 import com.wayon.car.Config
 import com.wayon.car.car.CarSignals
+import com.wayon.car.car.EnergyType
 import com.wayon.car.car.Gear
 import com.wayon.car.car.NaviBridge
 import com.wayon.car.car.UxRestrictions
 import com.wayon.car.server.DepartureCall
 import com.wayon.car.server.DepartureMessage
 import com.wayon.car.server.DeparturePerson
+import com.wayon.car.server.EnergySpot
 import com.wayon.car.server.ParkingSpot
 import com.wayon.car.server.RestAreaApi
 import com.wayon.car.server.ServerClient
@@ -230,7 +232,8 @@ class WayOnService : LifecycleService() {
     private fun sendAlert(alert: DestinationAlerts.Alert) {
         val (type, data) = when (alert) {
             is DestinationAlerts.Alert.EnergyLow -> DestinationAlerts.TYPE_ENERGY_LOW to mapOf(
-                "energyType" to alert.energyType.name, "rangeM" to alert.rangeM, "remainDistM" to alert.remainDistM,
+                // 서버·DB는 EV/FUEL (car.energy와 같게)
+                "energyType" to if (alert.energyType == EnergyType.ELECTRIC) "EV" else "FUEL", "rangeM" to alert.rangeM, "remainDistM" to alert.remainDistM,
             )
             // destName: 서버가 아직 새 목적지(car.route)를 못 받았으면 받을 때까지 기다리게
             is DestinationAlerts.Alert.ParkingNearDest -> DestinationAlerts.TYPE_PARKING_NEAR_DEST to mapOf(
@@ -294,6 +297,15 @@ class WayOnService : LifecycleService() {
             "passengers.update" -> serverUi.update { it.copy(passengers = message.passengers()) }
             "waypoint.request" -> message.waypointRequest()?.let(::showRequest)
             // 동승자가 없을 때만 차로 온다 (6-6): 음성으로 알리고, 정차하면 홈의 [주차장 보기]로 고른다
+            // 동승자가 없을 때만 차로 온다 (6-5): 음성으로 알리고, 정차하면 홈의 [경로 위 충전소·주유소]로 고른다
+            "energy.suggest" -> {
+                val suggestion = message.energySuggestion()
+                serverUi.update { it.copy(energy = suggestion) }
+                val what = if (suggestion.ev) "배터리" else "연료"
+                val where = if (suggestion.ev) "충전소" else "주유소"
+                val remain = suggestion.remainDistM?.let { "목적지까지 ${(it + 500) / 1000}킬로미터 남았는데 " } ?: ""
+                voice.say("${remain}${what}가 부족할 수 있어요. 정차하면 화면에서 ${where}를 확인할 수 있어요.")
+            }
             "parking.suggest" -> {
                 val suggestion = message.parkingSuggestion()
                 serverUi.update { it.copy(parking = suggestion) }
@@ -348,6 +360,26 @@ class WayOnService : LifecycleService() {
     }
 
     fun closeParking() = serverUi.update { it.copy(parking = null) }
+
+    /**
+     * 운전자가 차 화면에서 직접 고른 충전소·주유소 → 경유지로 넣는다 (수락 화면 없이, 서버 기록 없음, 4-4).
+     * 경유지가 2개 다 찼으면 내비가 아무 응답 없이 무시하므로 부르지 않는다 (10장)
+     */
+    fun chooseEnergy(spot: EnergySpot) {
+        if (!_state.value.parked) return
+        val existing = navi.drive.value?.waypoints?.size ?: 0
+        if (existing >= Config.MAX_WAYPOINTS) {
+            serverUi.update { it.copy(notice = "경유지가 가득 찼어요") }
+            return
+        }
+        if (navi.addWaypoint(Place(spot.name, spot.lat, spot.lng), spot.address, existing)) {
+            serverUi.update { it.copy(energy = null) }
+        } else {
+            serverUi.update { it.copy(notice = "경유지를 추가하지 못했어요") }
+        }
+    }
+
+    fun closeEnergy() = serverUi.update { it.copy(energy = null) }
 
     // ---- 출발해요 (car-app-design.md 4-5, 6-8, 출발해요 기획) ----
 
