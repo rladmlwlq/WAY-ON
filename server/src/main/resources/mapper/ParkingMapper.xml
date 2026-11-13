@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wayon.parking.ParkingMapper">
+
+	<sql id="lotColumns">
+		id, name, kind, addr, lat, lng, total_spaces, fee_type, basic_min, basic_fee, fee_1h AS fee1h,
+		weekday_open, weekday_close, sat_open, sat_close, holiday_open, holiday_close, phone, now_parked
+	</sql>
+
+	<select id="select_inBox" resultType="com.wayon.parking.ParkingRows$Lot">
+		SELECT <include refid="lotColumns"/>
+		FROM parking_lot
+		WHERE lat BETWEEN #{minLat} AND #{maxLat} AND lng BETWEEN #{minLng} AND #{maxLng}
+	</select>
+
+	<select id="select_lot" resultType="com.wayon.parking.ParkingRows$Lot">
+		SELECT <include refid="lotColumns"/>
+		FROM parking_lot
+		WHERE id = #{id}
+	</select>
+
+	<select id="select_destination" resultType="com.wayon.parking.ParkingRows$Destination">
+		SELECT dest_name, dest_lat, dest_lng
+		FROM trip
+		WHERE vehicle_id = #{vehicleId} AND status = 'ACTIVE'
+		ORDER BY id DESC
+		LIMIT 1
+	</select>
+</mapper>

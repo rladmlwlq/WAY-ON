@@ -17,6 +17,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.wayon.common.ApiException;
 import com.wayon.departure.DepartureService;
+import com.wayon.parking.ParkingService;
 import com.wayon.restarea.RestAreaDto;
 import com.wayon.restarea.RestAreaService;
 import com.wayon.trip.TripLiveService;
@@ -48,11 +49,13 @@ public class WsHandler extends TextWebSocketHandler {
 	private final DepartureService departures;
 	private final TripLiveService live;
 	private final WaypointService waypoints;
+	private final ParkingService parking;
 	private final JsonMapper json;
 	private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor();
 
 	public WsHandler(WsSessions sessions, VehicleService vehicles, TripService trips, RestAreaService restAreas,
-			DepartureService departures, TripLiveService live, WaypointService waypoints, JsonMapper json) {
+			DepartureService departures, TripLiveService live, WaypointService waypoints, ParkingService parking,
+			JsonMapper json) {
 		this.sessions = sessions;
 		this.vehicles = vehicles;
 		this.trips = trips;
@@ -60,6 +63,7 @@ public class WsHandler extends TextWebSocketHandler {
 		this.departures = departures;
 		this.live = live;
 		this.waypoints = waypoints;
+		this.parking = parking;
 		this.json = json;
 		timer.scheduleWithFixedDelay(this::expireTrips, EXPIRE_CHECK_S, EXPIRE_CHECK_S, TimeUnit.SECONDS);
 		timer.scheduleWithFixedDelay(this::deleteOldMessages, 1, 24 * 60, TimeUnit.MINUTES);
@@ -101,7 +105,11 @@ public class WsHandler extends TextWebSocketHandler {
 				case "trip.start" -> tripStart(session, requireCar(client), reqId, data);
 				case "trip.end" -> tripEnd(session, requireCar(client), reqId);
 				case "car.location" -> live.save_location(requireCar(client), data);
-				case "car.route" -> live.save_route(requireCar(client), data);
+				case "car.route" -> {
+					long vehicleId = requireCar(client);
+					live.save_route(vehicleId, data);
+					parking.save_routeChanged(vehicleId);
+				}
 				case "car.energy" -> live.save_energy(requireCar(client), data);
 				case "car.gear" -> live.save_gear(requireCar(client), data);
 				case "waypoint.propose" -> ack(session, reqId,
@@ -112,6 +120,7 @@ public class WsHandler extends TextWebSocketHandler {
 				}
 				case "waypoint.reject" -> waypoints.save_reject(requireCar(client), data);
 				case "waypoint.result" -> waypoints.save_result(requireCar(client), data);
+				case "parking.near-dest" -> parking.save_nearDest(requireCar(client), data);
 				case "restarea.approach" -> restArea(session, requireCar(client), reqId, data, RestAreaDto.Phase.APPROACH);
 				case "restarea.arrived" -> restArea(session, requireCar(client), reqId, data, RestAreaDto.Phase.ARRIVED);
 				case "restarea.left" -> restArea(session, requireCar(client), reqId, data, RestAreaDto.Phase.LEFT);
@@ -208,6 +217,7 @@ public class WsHandler extends TextWebSocketHandler {
 	private void tripEnd(WebSocketSession session, long vehicleId, String reqId) {
 		if (trips.save_tripEnd(vehicleId)) {
 			live.clear(vehicleId);
+			parking.clear(vehicleId);
 			sessions.sendToPassengers(vehicleId, "trip.ended", Map.of("reason", "ENDED"));
 		}
 		ack(session, reqId, Map.of());

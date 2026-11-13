@@ -619,3 +619,32 @@ a.button {
   background: var(--accent);
   border-color: var(--accent);
 }
+
+/* 목적지 근처 공영주차장 (ParkingCard) */
+.parking-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.sort-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.sort-toggle button {
+  flex: 1;
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.sort-toggle button.on {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}

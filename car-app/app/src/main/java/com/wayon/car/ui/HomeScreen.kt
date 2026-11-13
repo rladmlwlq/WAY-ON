@@ -48,6 +48,7 @@ fun HomeScreen(
     onConsent: () -> Unit = {},
     onDeparture: () -> Unit = {},
     onManage: () -> Unit = {},
+    onParking: () -> Unit = {},
 ) {
     val arrived = state.restArea.arrived
     // [출발해요]: 정차 중이고 알림을 받을 동승자가 1명 이상일 때 (출발해요 기획 7장).
@@ -140,6 +141,13 @@ fun HomeScreen(
                         Button(onClick = onOpenQr, modifier = half, contentPadding = ButtonPadding) {
                             ButtonText("동승자 연결", buttonFont)
                         }
+                    }
+                }
+                // 동승자가 없을 때 서버가 차로 보낸 목적지 근처 주차장 (6-6). 정차 중에만 고른다
+                server.parking?.takeIf { it.places.isNotEmpty() }?.let { p ->
+                    Spacer(Modifier.height(20.dp))
+                    OutlinedButton(onClick = onParking, modifier = button, contentPadding = ButtonPadding) {
+                        ButtonText("🅿️ 목적지 근처 주차장 ${p.places.size}곳", buttonFont)
                     }
                 }
             }

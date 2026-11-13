@@ -24,6 +24,24 @@ data class WaypointRequest(
     val expiresAt: String,
 )
 
+/** parking.suggest의 주차장 1곳 (app-api.md 7장, way-on.md 3.6). fee1h: 1시간 요금(무료 0, 모르면 null) */
+data class ParkingSpot(
+    val extId: String,
+    val name: String,
+    val address: String?,
+    val lat: Double,
+    val lng: Double,
+    val distM: Int,
+    val fee1h: Int?,
+    val feeType: String,
+    val openNow: Boolean?,
+    val totalSpaces: Int?,
+    val nowParked: Int?,
+)
+
+/** 목적지 근처 공영주차장 제안. 동승자가 없을 때만 차로 온다 */
+data class ParkingSuggestion(val destName: String?, val places: List<ParkingSpot>)
+
 /** 서버가 보낸 메시지 1개 {"type", "reqId", "data"} (app-api.md 4-2) */
 data class ServerMessage(val type: String, val reqId: String?, val data: JsonObject) {
 
@@ -99,6 +117,27 @@ data class ServerMessage(val type: String, val reqId: String?, val data: JsonObj
         )
     }
 
+    /** parking.suggest. 주차장 행이 깨졌으면 그 행만 뺀다 */
+    fun parkingSuggestion(): ParkingSuggestion {
+        val places = data.get("places")?.takeIf { it.isJsonArray }?.asJsonArray.orEmpty().mapNotNull { e ->
+            val p = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+            ParkingSpot(
+                extId = p.str("extId") ?: return@mapNotNull null,
+                name = p.str("name") ?: return@mapNotNull null,
+                address = p.str("address"),
+                lat = p.num("lat")?.toDouble() ?: return@mapNotNull null,
+                lng = p.num("lng")?.toDouble() ?: return@mapNotNull null,
+                distM = p.num("distM")?.toInt() ?: 0,
+                fee1h = p.num("fee1h")?.toInt(),
+                feeType = p.str("feeType") ?: "PAID",
+                openNow = p.get("openNow")?.takeIf { it.isJsonPrimitive }?.asBoolean,
+                totalSpaces = p.num("totalSpaces")?.toInt(),
+                nowParked = p.num("nowParked")?.toInt(),
+            )
+        }
+        return ParkingSuggestion(data.str("destName"), places)
+    }
+
     /** waypoint.expired의 requestId */
     fun requestId(): Long? = data.get("requestId")?.takeIf { it.isJsonPrimitive }?.asLong
 }
@@ -134,3 +173,8 @@ data class DepartureMessages(val messages: List<DepartureMessage> = emptyList(),
 private fun JsonObject.obj(name: String): JsonObject? = get(name)?.takeIf { it.isJsonObject }?.asJsonObject
 
 private fun JsonObject.str(name: String): String? = get(name)?.takeIf(JsonElement::isJsonPrimitive)?.asString
+
+private fun JsonObject.num(name: String): Number? =
+    get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asNumber
+
+private fun com.google.gson.JsonArray?.orEmpty(): List<JsonElement> = this?.toList() ?: emptyList()

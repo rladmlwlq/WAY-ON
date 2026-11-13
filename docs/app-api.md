@@ -422,9 +422,9 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 
 **판단은 차량 앱**: 목적지 남은 거리 10km 이하 또는 남은 시간 5분 이하, 목적지 1개당 1번.
 ```json
-{"type": "parking.near-dest", "data": {"remainDistM": 9800, "remainTimeS": 840}}
+{"type": "parking.near-dest", "data": {"destName": "서현역", "remainDistM": 9800, "remainTimeS": 840}}
 ```
-서버 동작: 목적지 반경 1km 공영주차장을 `parking_lot`에서 찾아 `parking.suggest`를 보냅니다 (동승자 있으면 폰, 없으면 차).
+서버 동작: 목적지 반경 1km 공영주차장을 `parking_lot`에서 찾아 `parking.suggest`를 보냅니다 (동승자 있으면 폰, 없으면 차). 1km 안에 없으면 2km까지, 최대 20곳. 목적지는 `car.route`(5-4)로 저장된 값입니다. 차는 목적지가 바뀌는 순간 이 메시지를 보내서 새 `car.route`보다 먼저 올 수 있으므로, 저장된 목적지 이름이 `destName`과 다르면 기다렸다가 맞는 `car.route`가 오면 그때 보냅니다. 차량 앱은 서버에 붙어 세션이 있을 때만 판단합니다 (끊긴 동안 판단하면 보낸 것으로 표시만 되고 버려짐) (2026-11-13 구현).
 
 ### 5-9. `restarea.approach`, `restarea.arrived`, `restarea.left` — 휴게소 도착 안내 (A1)
 
@@ -518,7 +518,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 | `waypoint.expired` | 차 | `{"requestId": 88}` 10초 초과 또는 새 요청이 와서 밀림 → 수락 화면 닫기 |
 | `waypoint.status` | 폰 | `{"requestId": 88, "status": "APPLIED", "failReason": null, "requestedBy": "민지", "placeName": "경산(서울)휴게소", "action": "ADD"}` 상태가 바뀔 때마다. 모든 동승자에게 |
 | `energy.suggest` | 폰 (없으면 차) | `{"energyType", "rangeM", "remainDistM", "places": [3-6의 place …]}` |
-| `parking.suggest` | 폰 (없으면 차) | 가까운 순으로 보냄. 폰에서 **가까운 순 / 싼 순**(`fee1h`, NULL은 맨 뒤)을 바꿔 봄 (way-on.md 8.1). `{"destName", "places": [{"extId": "pl:5120", "name", "address", "lat", "lng", "distM", "fee1h", "feeType", "totalSpaces", "nowParked", "openNow"}]}` |
+| `parking.suggest` | 폰 (없으면 차) | 가까운 순으로 보냄. 폰에서 **가까운 순 / 싼 순**(`fee1h`, NULL은 맨 뒤)을 바꿔 봄 (way-on.md 8.1). `{"destName", "places": [{"extId": "pl:5120", "name", "address", "lat", "lng", "distM", "fee1h", "feeType", "basicMin", "basicFee", "totalSpaces", "nowParked", "openNow", "phone"}]}`. `fee1h`: 1시간 요금(무료 0, 모름 null). 추가 요금이 비어 있으면 기본 단위가 반복된다고 보고 계산 (erd.md). `openNow`: 한국 시간 평일·토·일 시간으로, 공휴일 달력은 안 봄, 모르면 null |
 | `restarea.info` | 폰 | `{"phase": "APPROACH" \| "ARRIVED" \| "LEFT", "restArea": 3-7 응답과 같은 모양}` (`LEFT`는 `restArea` 없이 닫기만) |
 | `departure.called` | 폰 (+ Web Push) | `{"callId": 40, "calledAt", "etaS", "destName", "nextRestAreaM"}` |
 | `departure.message` | 둘 다 | 2-5의 메시지 1개 |
