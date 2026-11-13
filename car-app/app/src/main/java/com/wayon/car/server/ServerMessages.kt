@@ -130,18 +130,6 @@ data class DepartureSender(val passengerId: Long?, val nickname: String)
 /** 2-5 응답 */
 data class DepartureMessages(val messages: List<DepartureMessage> = emptyList(), val hasMore: Boolean = false)
 
-/** 2-6 지난 출발 알림 1건. passengers는 그 세션에 있던 동승자 닉네임 */
-data class PastCall(
-    val callId: Long,
-    val status: String,
-    val destName: String?,
-    val calledAt: String,
-    val closedAt: String?,
-    val passengers: List<String> = emptyList(),
-)
-
-/** 2-6 응답 */
-data class DepartureCalls(val calls: List<PastCall> = emptyList(), val hasMore: Boolean = false)
 
 private fun JsonObject.obj(name: String): JsonObject? = get(name)?.takeIf { it.isJsonObject }?.asJsonObject
 

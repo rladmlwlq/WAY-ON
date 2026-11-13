@@ -147,23 +147,6 @@ public class VehicleService {
 		return new VehicleDto.Messages(rows.stream().map(VehicleService::toMessage).toList(), hasMore);
 	}
 
-	/** 2-6. 끝난 출발 알림 (최신이 먼저). 30일 지난 것은 대화가 지워져서 빼고, 동승자는 그 세션에 있던 사람 */
-	public VehicleDto.Calls select_departureCalls(String authorization, Long before, Integer size) {
-		long vehicleId = requireCar(authorization);
-		int limit = size == null ? DEFAULT_MESSAGES : Math.clamp(size, 1, MAX_MESSAGES);
-		List<VehicleRows.Call> rows = new ArrayList<>(
-				mapper.select_departureCalls(vehicleId, before, limit + 1, now().minus(MESSAGE_TTL)));
-		boolean hasMore = rows.size() > limit;
-		if (hasMore) {
-			rows.remove(limit);
-		}
-		return new VehicleDto.Calls(rows.stream()
-				.map(c -> new VehicleDto.Call(c.id(), c.status(), c.destName(), toInstant(c.calledAt()),
-						toInstant(c.closedAt()),
-						c.nicknames() == null ? List.of() : List.of(c.nicknames().split(","))))
-				.toList(), hasMore);
-	}
-
 	/**
 	 * 3-1. QR 하나로 만료(3분) 전까지 여러 명이 연결한다. 인원 4명·닉네임 중복은 차량 행을 잠그고 확인한다.
 	 * READ_COMMITTED: 기본값(REPEATABLE READ)이면 차량 행을 잠근 뒤의 인원·닉네임 확인이 잠금 전 스냅샷을 본다

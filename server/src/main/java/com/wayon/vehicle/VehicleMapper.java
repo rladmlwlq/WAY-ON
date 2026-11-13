@@ -52,7 +52,4 @@ public interface VehicleMapper {
 	List<VehicleRows.Message> select_departureMessages(@Param("vehicleId") long vehicleId, @Param("before") Long before,
 			@Param("limit") int limit, @Param("since") LocalDateTime since, @Param("callId") Long callId);
 
-	/** 끝난 출발 알림, 최신순 */
-	List<VehicleRows.Call> select_departureCalls(@Param("vehicleId") long vehicleId, @Param("before") Long before,
-			@Param("limit") int limit, @Param("since") LocalDateTime since);
 }

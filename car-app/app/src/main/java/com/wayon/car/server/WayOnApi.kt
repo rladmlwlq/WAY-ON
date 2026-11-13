@@ -60,13 +60,6 @@ interface WayOnApi {
         @Path("passengerId") passengerId: Long,
     )
 
-    /** 2-6 지난 출발 알림 목록 (최신이 먼저). 대화 화면 [다시 알리기] 아래 카드 */
-    @GET("api/vehicles/me/departure-calls")
-    suspend fun departureCalls(
-        @Header("Authorization") authorization: String,
-        @Query("size") size: Int = 20,
-    ): DepartureCalls
-
     companion object {
         fun create(baseUrl: String = Config.SERVER_URL): WayOnApi {
             val client = OkHttpClient.Builder()
