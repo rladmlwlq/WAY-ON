@@ -12,8 +12,9 @@ import kotlin.math.sqrt
  * @param path [lng, lat] 점 목록 (app-api.md 7-1 순서 그대로)
  * @param stops 경유지 (경로선 위 가장 가까운 점을 그 경유지 자리로 본다)
  * @param speedMps 실제 속도 (경로 거리 / 경로 시간). 남은 시간 계산과 1배속 이동에 쓴다
+ * @param destination 목적지. 지나간 경유지를 내비에서 뺄 때 다시 넣는다
  */
-class DemoRoute(path: List<DoubleArray>, stops: List<Place>, val speedMps: Double) {
+class DemoRoute(path: List<DoubleArray>, val stops: List<Place>, val speedMps: Double, val destination: Place? = null) {
 
     private val lat = path.map { it[1] }
     private val lng = path.map { it[0] }

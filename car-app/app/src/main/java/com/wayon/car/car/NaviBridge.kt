@@ -309,6 +309,11 @@ class NaviBridge(context: Context) {
     private fun resumeDemo() {
         demoParkedAtStop = false
         _demo.value = _demo.value.copy(pausedAt = null)
+        // 에뮬레이터 내비는 차가 안 움직여 지나간 경유지를 스스로 빼지 않는다. 남은 경유지로 경로를 다시 넣어
+        // 실제 주행처럼 경유지 수(최대 2)가 줄게 한다. 서버는 지금(시연) 위치부터 경로선을 다시 만든다
+        val route = demoRoute ?: return
+        val dest = route.destination ?: return
+        requestRouteVia(dest, route.stops.filter { it.name !in demoPassed })
     }
 
     private fun publishDemo() {

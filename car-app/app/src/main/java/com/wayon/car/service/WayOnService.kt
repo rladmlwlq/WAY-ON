@@ -3,12 +3,16 @@ package com.wayon.car.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.wayon.car.BuildConfig
@@ -127,6 +131,9 @@ class WayOnService : LifecycleService() {
         )
         wire()
         connectServer()
+        if (BuildConfig.DEBUG) {
+            ContextCompat.registerReceiver(this, demoControl, IntentFilter("com.wayon.car.DEMO"), ContextCompat.RECEIVER_EXPORTED)
+        }
     }
 
     private fun wire() {
@@ -730,7 +737,22 @@ class WayOnService : LifecycleService() {
         return binder
     }
 
+    /**
+     * 디버그 빌드 전용: 녹화·테스트 스크립트가 화면을 건드리지 않고 시연 주행을 조작한다.
+     * `adb shell am broadcast --user 10 -a com.wayon.car.DEMO --es cmd start|stop|speed --ei speed 20`
+     */
+    private val demoControl = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.getStringExtra("cmd")) {
+                "start" -> startDemo()
+                "stop" -> stopDemo()
+                "speed" -> setDemoSpeed(intent.getIntExtra("speed", 5))
+            }
+        }
+    }
+
     override fun onDestroy() {
+        if (BuildConfig.DEBUG) unregisterReceiver(demoControl)
         server.stop()
         voice.stop()
         uxRestrictions.stop()

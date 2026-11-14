@@ -152,7 +152,12 @@ data class ServerMessage(val type: String, val reqId: String?, val data: JsonObj
         val dist = data.num("distanceM")?.toDouble()
         val time = data.num("durationS")?.toDouble()
         val speed = if (dist != null && time != null && dist > 0 && time > 0) dist / time else DemoRoute.DEFAULT_SPEED_MPS
-        return DemoRoute(path, stops, speed)
+        val dest = data.obj("destination")?.let { d ->
+            val lat = d.num("lat")?.toDouble()
+            val lng = d.num("lng")?.toDouble()
+            if (lat == null || lng == null) null else Place(d.str("name") ?: "목적지", lat, lng)
+        }
+        return DemoRoute(path, stops, speed, dest)
     }
 
     /** parking.suggest. 주차장 행이 깨졌으면 그 행만 뺀다 */
