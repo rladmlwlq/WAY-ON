@@ -32,6 +32,7 @@ docs/      설계 문서
 
 - 위치: [`apk/WayOn_WayOn_release.apk`](apk/WayOn_WayOn_release.apk) (서명된 릴리스, versionName 0.1.0)
 - 대상: Pleos Connect Emulator 2.1.0 (Android 14, API 34), minSdk 28
+- 화면 규격: 2560×1440 가로 (에뮬레이터 기본 디스플레이)
 - **서버를 아직 배포하지 않아**, 이 APK는 에뮬레이터를 띄운 PC의 로컬 서버(`http://10.0.2.2:8080`)에 붙습니다. 서버 없이 실행하면 앱은 뜨지만 화면 위에 "서버 연결 끊김"이 보이고 동승자 기능은 동작하지 않습니다.
 
 ## 실행 방법
