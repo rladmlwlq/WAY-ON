@@ -384,6 +384,25 @@ fieldset:disabled {
   color: var(--muted);
 }
 
+/* 말풍선 옆 시간 (카톡처럼 바깥 아래쪽) */
+.bubble .line {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.bubble.mine .line {
+  flex-direction: row-reverse;
+}
+
+.bubble .line time {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 /* 차 위치·경로 지도 (TripMap) */
 .trip-map {
   width: 100%;
@@ -596,6 +615,35 @@ a.button {
 }
 
 .map-pin.place.selected {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 목적지 근처 공영주차장 (ParkingCard) */
+.parking-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.sort-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.sort-toggle button {
+  flex: 1;
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.sort-toggle button.on {
   color: #fff;
   background: var(--accent);
   border-color: var(--accent);

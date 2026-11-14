@@ -9,6 +9,8 @@ import com.wayon.car.car.Gear
 import com.wayon.car.car.UxRestrictions
 import com.wayon.car.server.DepartureMessage
 import com.wayon.car.server.DeparturePerson
+import com.wayon.car.server.EnergySuggestion
+import com.wayon.car.server.ParkingSuggestion
 import com.wayon.car.server.Passenger
 import com.wayon.car.server.Trip
 import com.wayon.car.server.WaypointRequest
@@ -53,6 +55,10 @@ data class ServerUi(
     val departure: DepartureUi? = null,
     /** 경유지 요청 수락 화면 (4-3). 없으면 null. 어느 화면이든 그 위에, 주행 중에도 뜬다 */
     val request: RequestUi? = null,
+    /** 목적지 근처 공영주차장 제안 (동승자가 없을 때 차로 옴, 6-6). 고르거나 닫으면 null */
+    val parking: ParkingSuggestion? = null,
+    /** 에너지 제안 (동승자가 없을 때 차로 옴, 6-5). 고르거나 닫으면 null */
+    val energy: EnergySuggestion? = null,
 ) {
     val onlinePassengers: List<Passenger> get() = passengers.filter { it.online }
     val passengersFull: Boolean get() = passengers.size >= Config.MAX_PASSENGERS
@@ -73,13 +79,14 @@ data class DepartureUi(
     val destName: String? = null,
     /** 사람별 마지막 빠른 답장 (departure.status) */
     val people: List<DeparturePerson> = emptyList(),
-    /** 지난 대화 + 이번 대화 (최신이 마지막) */
+    /** 이번 알림의 대화 (최신이 마지막) */
     val messages: List<DepartureMessage> = emptyList(),
     /** [다시 알리기]를 이 시각(기기 ms)까지 잠근다 (1분에 1번) */
     val remindLockedUntilMs: Long = 0,
     /** 보내기 실패 문구 (3초 뒤 지움) */
     val error: String? = null,
 )
+
 /** 수락 화면 1건 (car-app-design.md 6-4 `pendingRequest`) */
 data class RequestUi(
     val request: WaypointRequest,

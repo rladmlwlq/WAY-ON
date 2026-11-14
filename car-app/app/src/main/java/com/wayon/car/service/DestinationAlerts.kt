@@ -30,7 +30,7 @@ class DestinationAlerts(
         data class EnergyLow(val energyType: EnergyType, val rangeM: Int, val remainDistM: Int) : Alert
 
         /** app-api.md 5-8 */
-        data class ParkingNearDest(val remainDistM: Int, val remainTimeS: Int) : Alert
+        data class ParkingNearDest(val destName: String, val remainDistM: Int, val remainTimeS: Int) : Alert
     }
 
     private var destName: String? = null
@@ -76,7 +76,7 @@ class DestinationAlerts(
         val near = (distM > 0 && distM <= parkingDistM) || (timeS > 0 && timeS <= parkingTimeS)
         if (!near) return null
         parkingAlerted = true
-        return Alert.ParkingNearDest(distM, timeS)
+        return Alert.ParkingNearDest(destination.name, distM, timeS)
     }
 
     companion object {

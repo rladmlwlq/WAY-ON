@@ -15,12 +15,15 @@ import com.wayon.car.BuildConfig
 import com.wayon.car.Config
 import com.wayon.car.car.CarSignals
 import com.wayon.car.car.DemoRoute
+import com.wayon.car.car.EnergyType
 import com.wayon.car.car.Gear
 import com.wayon.car.car.NaviBridge
 import com.wayon.car.car.UxRestrictions
 import com.wayon.car.server.DepartureCall
 import com.wayon.car.server.DepartureMessage
 import com.wayon.car.server.DeparturePerson
+import com.wayon.car.server.EnergySpot
+import com.wayon.car.server.ParkingSpot
 import com.wayon.car.server.RestAreaApi
 import com.wayon.car.server.ServerClient
 import com.wayon.car.server.ServerMessage
@@ -135,10 +138,13 @@ class WayOnService : LifecycleService() {
         lifecycleScope.launch { carSignals.gear.collect(guide::onGear) }
         lifecycleScope.launch { carSignals.gear.collect(navi::onDemoGear) }
 
-        // 에너지 제안·목적지 근처 주차장 (6-5, 6-6): 남은 거리·시간이나 에너지가 바뀔 때마다 본다
+        // 에너지 제안·목적지 근처 주차장 (6-5, 6-6): 남은 거리·시간이나 에너지가 바뀔 때마다 본다.
+        // 서버에 붙어 세션이 있을 때만 판단한다. 끊긴 동안 판단하면 "보냄"으로 표시만 되고 메시지는 버려진다
+        val sessionReady = serverUi.map { it.online && it.trip != null }.distinctUntilChanged()
         lifecycleScope.launch {
-            combine(navi.drive, carSignals.energy) { drive, energy -> destinationAlerts.update(drive?.destination, energy) }
-                .collect { it.forEach(::sendAlert) }
+            combine(navi.drive, carSignals.energy, sessionReady) { drive, energy, ready ->
+                if (ready) destinationAlerts.update(drive?.destination, energy) else emptyList()
+            }.collect { it.forEach(::sendAlert) }
         }
 
         // 정차 = 기어 P이고 주행 규제 없음. 화면(AppState.parked)과 같은 기준
@@ -228,10 +234,12 @@ class WayOnService : LifecycleService() {
     private fun sendAlert(alert: DestinationAlerts.Alert) {
         val (type, data) = when (alert) {
             is DestinationAlerts.Alert.EnergyLow -> DestinationAlerts.TYPE_ENERGY_LOW to mapOf(
-                "energyType" to alert.energyType.name, "rangeM" to alert.rangeM, "remainDistM" to alert.remainDistM,
+                // 서버·DB는 EV/FUEL (car.energy와 같게)
+                "energyType" to if (alert.energyType == EnergyType.ELECTRIC) "EV" else "FUEL", "rangeM" to alert.rangeM, "remainDistM" to alert.remainDistM,
             )
+            // destName: 서버가 아직 새 목적지(car.route)를 못 받았으면 받을 때까지 기다리게
             is DestinationAlerts.Alert.ParkingNearDest -> DestinationAlerts.TYPE_PARKING_NEAR_DEST to mapOf(
-                "remainDistM" to alert.remainDistM, "remainTimeS" to alert.remainTimeS,
+                "destName" to alert.destName, "remainDistM" to alert.remainDistM, "remainTimeS" to alert.remainTimeS,
             )
         }
         if (!server.send(type, data)) log("끊겨서 못 보냄: $type $data")
@@ -292,6 +300,23 @@ class WayOnService : LifecycleService() {
             // 폰 지도와 같은 경로선. 시연 주행이 이것을 따라 달린다 (car-app-design.md 9장)
             "route.update" -> navi.setDemoRoute(message.demoRoute())
             "waypoint.request" -> message.waypointRequest()?.let(::showRequest)
+            // 동승자가 없을 때만 차로 온다 (6-6): 음성으로 알리고, 정차하면 홈의 [주차장 보기]로 고른다
+            // 동승자가 없을 때만 차로 온다 (6-5): 음성으로 알리고, 정차하면 홈의 [경로 위 충전소·주유소]로 고른다
+            "energy.suggest" -> {
+                val suggestion = message.energySuggestion()
+                serverUi.update { it.copy(energy = suggestion) }
+                val what = if (suggestion.ev) "배터리" else "연료"
+                val where = if (suggestion.ev) "충전소" else "주유소"
+                val remain = suggestion.remainDistM?.let { "목적지까지 ${(it + 500) / 1000}킬로미터 남았는데 " } ?: ""
+                voice.say("${remain}${what}가 부족할 수 있어요. 정차하면 화면에서 ${where}를 확인할 수 있어요.")
+            }
+            "parking.suggest" -> {
+                val suggestion = message.parkingSuggestion()
+                serverUi.update { it.copy(parking = suggestion) }
+                if (suggestion.places.isNotEmpty()) {
+                    voice.say("목적지 근처 공영주차장을 찾았어요. 정차하면 화면에서 확인할 수 있어요.")
+                }
+            }
             "waypoint.expired" -> if (message.requestId() == serverUi.value.request?.request?.requestId) closeRequestIfWaiting()
             "departure.status" -> {
                 val people = message.departurePeople()
@@ -322,6 +347,43 @@ class WayOnService : LifecycleService() {
             }
         }
     }
+
+    // ---- 목적지 근처 주차장 (car-app-design.md 6-6) ----
+
+    /**
+     * 운전자가 차 화면에서 직접 고른 주차장 → 목적지를 바꾼다. 수락 화면 없이 바로 내비에 넣고,
+     * 서버에는 기록하지 않는다 (바뀐 목적지는 car.route로 간다, 4-4·12장 3번과 같은 흐름)
+     */
+    fun chooseParking(spot: ParkingSpot) {
+        if (!_state.value.parked) return
+        if (navi.requestRoute(Place(spot.name, spot.lat, spot.lng), spot.address)) {
+            serverUi.update { it.copy(parking = null) }
+        } else {
+            serverUi.update { it.copy(notice = "목적지를 바꾸지 못했어요") }
+        }
+    }
+
+    fun closeParking() = serverUi.update { it.copy(parking = null) }
+
+    /**
+     * 운전자가 차 화면에서 직접 고른 충전소·주유소 → 경유지로 넣는다 (수락 화면 없이, 서버 기록 없음, 4-4).
+     * 경유지가 2개 다 찼으면 내비가 아무 응답 없이 무시하므로 부르지 않는다 (10장)
+     */
+    fun chooseEnergy(spot: EnergySpot) {
+        if (!_state.value.parked) return
+        val existing = navi.drive.value?.waypoints?.size ?: 0
+        if (existing >= Config.MAX_WAYPOINTS) {
+            serverUi.update { it.copy(notice = "경유지가 가득 찼어요") }
+            return
+        }
+        if (navi.addWaypoint(Place(spot.name, spot.lat, spot.lng), spot.address, existing)) {
+            serverUi.update { it.copy(energy = null) }
+        } else {
+            serverUi.update { it.copy(notice = "경유지를 추가하지 못했어요") }
+        }
+    }
+
+    fun closeEnergy() = serverUi.update { it.copy(energy = null) }
 
     // ---- 출발해요 (car-app-design.md 4-5, 6-8, 출발해요 기획) ----
 
@@ -401,15 +463,16 @@ class WayOnService : LifecycleService() {
         loadDepartureMessages(call.callId)
     }
 
-    /** 2-5 지난 대화. 그사이 실시간으로 온 메시지와 합친다 */
+    /** 2-5 이번 알림의 대화만 ([출발해요]마다 새 대화방). 그사이 실시간으로 온 메시지와 합친다 */
     private fun loadDepartureMessages(callId: Long) {
         val token = carToken ?: return
         lifecycleScope.launch {
-            runCatching { api.departureMessages(WayOnApi.bearer(token)) }
+            runCatching { api.departureMessages(WayOnApi.bearer(token), callId) }
                 .onSuccess { res -> updateDeparture(callId) { it.copy(messages = mergeMessages(res.messages, it.messages)) } }
-                .onFailure { log("지난 대화 실패: ${it.message}") }
+                .onFailure { log("대화 불러오기 실패: ${it.message}") }
         }
     }
+
 
     private fun sendDepartureMessage(data: Map<String, Any>) {
         val callId = serverUi.value.departure?.callId ?: return

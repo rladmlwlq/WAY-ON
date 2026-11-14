@@ -127,14 +127,18 @@ public class VehicleService {
 				.toList());
 	}
 
-	/** 2-5. 차량·동승자 토큰 공용. 최신이 마지막 */
-	public VehicleDto.Messages select_departureMessages(String authorization, Long before, Integer size) {
+	/**
+	 * 2-5. 차량·동승자 토큰 공용. 최신이 마지막. callId가 있으면 그 출발 알림의 대화만
+	 * ([출발해요]마다 새 대화방, 2026-11-09)
+	 */
+	public VehicleDto.Messages select_departureMessages(String authorization, Long before, Integer size,
+			Long callId) {
 		long vehicleId = isPassengerToken(authorization) ? requirePassenger(authorization).vehicleId()
 				: requireCar(authorization);
 		int limit = size == null ? DEFAULT_MESSAGES : Math.clamp(size, 1, MAX_MESSAGES);
 		// 하루 1번 삭제 배치가 돌기 전에도 30일 지난 메시지는 주지 않는다
 		List<VehicleRows.Message> rows = new ArrayList<>(
-				mapper.select_departureMessages(vehicleId, before, limit + 1, now().minus(MESSAGE_TTL)));
+				mapper.select_departureMessages(vehicleId, before, limit + 1, now().minus(MESSAGE_TTL), callId));
 		boolean hasMore = rows.size() > limit;
 		if (hasMore) {
 			rows.remove(limit);

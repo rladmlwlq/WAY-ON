@@ -26,6 +26,39 @@ data class WaypointRequest(
     val expiresAt: String,
 )
 
+/** parking.suggest의 주차장 1곳 (app-api.md 7장, way-on.md 3.6). fee1h: 1시간 요금(무료 0, 모르면 null) */
+data class ParkingSpot(
+    val extId: String,
+    val name: String,
+    val address: String?,
+    val lat: Double,
+    val lng: Double,
+    val distM: Int,
+    val fee1h: Int?,
+    val feeType: String,
+    val openNow: Boolean?,
+    val totalSpaces: Int?,
+    val nowParked: Int?,
+)
+
+/** 목적지 근처 공영주차장 제안. 동승자가 없을 때만 차로 온다 */
+data class ParkingSuggestion(val destName: String?, val places: List<ParkingSpot>)
+
+/** energy.suggest의 충전소·주유소 1곳. info: "전기차 충전소" 또는 "휘발유 1,689원" */
+data class EnergySpot(
+    val type: String,
+    val extId: String,
+    val name: String,
+    val address: String?,
+    val lat: Double,
+    val lng: Double,
+    val distM: Int,
+    val info: String?,
+)
+
+/** 에너지 제안 (F6). 동승자가 없을 때만 차로 온다. ev면 충전소, 아니면 주유소 */
+data class EnergySuggestion(val ev: Boolean, val rangeM: Int, val remainDistM: Int?, val places: List<EnergySpot>)
+
 /** 서버가 보낸 메시지 1개 {"type", "reqId", "data"} (app-api.md 4-2) */
 data class ServerMessage(val type: String, val reqId: String?, val data: JsonObject) {
 
@@ -112,14 +145,60 @@ data class ServerMessage(val type: String, val reqId: String?, val data: JsonObj
             val w = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
             Place(
                 w.str("name") ?: return@mapNotNull null,
-                w.num("lat") ?: return@mapNotNull null,
-                w.num("lng") ?: return@mapNotNull null,
+                w.num("lat")?.toDouble() ?: return@mapNotNull null,
+                w.num("lng")?.toDouble() ?: return@mapNotNull null,
             )
         } ?: emptyList()
-        val dist = data.num("distanceM")
-        val time = data.num("durationS")
+        val dist = data.num("distanceM")?.toDouble()
+        val time = data.num("durationS")?.toDouble()
         val speed = if (dist != null && time != null && dist > 0 && time > 0) dist / time else DemoRoute.DEFAULT_SPEED_MPS
         return DemoRoute(path, stops, speed)
+    }
+
+    /** parking.suggest. 주차장 행이 깨졌으면 그 행만 뺀다 */
+    fun parkingSuggestion(): ParkingSuggestion {
+        val places = data.get("places")?.takeIf { it.isJsonArray }?.asJsonArray.orEmpty().mapNotNull { e ->
+            val p = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+            ParkingSpot(
+                extId = p.str("extId") ?: return@mapNotNull null,
+                name = p.str("name") ?: return@mapNotNull null,
+                address = p.str("address"),
+                lat = p.num("lat")?.toDouble() ?: return@mapNotNull null,
+                lng = p.num("lng")?.toDouble() ?: return@mapNotNull null,
+                distM = p.num("distM")?.toInt() ?: 0,
+                fee1h = p.num("fee1h")?.toInt(),
+                feeType = p.str("feeType") ?: "PAID",
+                openNow = p.get("openNow")?.takeIf { it.isJsonPrimitive }?.asBoolean,
+                totalSpaces = p.num("totalSpaces")?.toInt(),
+                nowParked = p.num("nowParked")?.toInt(),
+            )
+        }
+        return ParkingSuggestion(data.str("destName"), places)
+    }
+
+    /** energy.suggest. 장소 행이 깨졌으면 그 행만 뺀다 */
+    fun energySuggestion(): EnergySuggestion {
+        val places = data.get("places")?.takeIf { it.isJsonArray }?.asJsonArray.orEmpty().mapNotNull { e ->
+            val p = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+            val detail = p.obj("detail")
+            val price = detail?.num("gasoline")?.toInt()
+            EnergySpot(
+                type = p.str("type") ?: return@mapNotNull null,
+                extId = p.str("extId") ?: return@mapNotNull null,
+                name = p.str("name") ?: return@mapNotNull null,
+                address = p.str("address"),
+                lat = p.num("lat")?.toDouble() ?: return@mapNotNull null,
+                lng = p.num("lng")?.toDouble() ?: return@mapNotNull null,
+                distM = p.num("distM")?.toInt() ?: 0,
+                info = if (price != null) "휘발유 ${"%,d".format(price)}원" else detail?.str("category"),
+            )
+        }
+        return EnergySuggestion(
+            ev = data.str("energyType") == "EV",
+            rangeM = data.num("rangeM")?.toInt() ?: 0,
+            remainDistM = data.num("remainDistM")?.toInt(),
+            places = places,
+        )
     }
 
     /** waypoint.expired의 requestId */
@@ -153,9 +232,12 @@ data class DepartureSender(val passengerId: Long?, val nickname: String)
 /** 2-5 응답 */
 data class DepartureMessages(val messages: List<DepartureMessage> = emptyList(), val hasMore: Boolean = false)
 
+
 private fun JsonObject.obj(name: String): JsonObject? = get(name)?.takeIf { it.isJsonObject }?.asJsonObject
 
 private fun JsonObject.str(name: String): String? = get(name)?.takeIf(JsonElement::isJsonPrimitive)?.asString
 
-private fun JsonObject.num(name: String): Double? =
-    get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asDouble
+private fun JsonObject.num(name: String): Number? =
+    get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asNumber
+
+private fun com.google.gson.JsonArray?.orEmpty(): List<JsonElement> = this?.toList() ?: emptyList()

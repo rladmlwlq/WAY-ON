@@ -55,7 +55,9 @@ public class VehicleController {
 	@GetMapping("/me/departure-messages")
 	public VehicleDto.Messages select_departureMessages(
 			@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
-			@RequestParam(required = false) Long before, @RequestParam(required = false) Integer size) {
-		return service.select_departureMessages(authorization, before, size);
+			@RequestParam(required = false) Long before, @RequestParam(required = false) Integer size,
+			@RequestParam(required = false) Long callId) {
+		return service.select_departureMessages(authorization, before, size, callId);
 	}
+
 }

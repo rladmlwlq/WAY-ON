@@ -46,12 +46,12 @@ interface WayOnApi {
     @GET("api/vehicles/me/passengers")
     suspend fun passengers(@Header("Authorization") authorization: String): Passengers
 
-    /** 2-5 지난 대화 (최신이 마지막). 출발해요 대화 화면을 열 때 */
+    /** 2-5 한 출발 알림의 대화 (최신이 마지막). [출발해요]마다 새 대화방이라 callId로 */
     @GET("api/vehicles/me/departure-messages")
     suspend fun departureMessages(
         @Header("Authorization") authorization: String,
-        @Query("before") before: Long? = null,
-        @Query("size") size: Int? = null,
+        @Query("callId") callId: Long,
+        @Query("size") size: Int = 50,
     ): DepartureMessages
     /** 2-4. 해제된 폰은 서버가 4403으로 끊는다 */
     @DELETE("api/vehicles/me/passengers/{passengerId}")

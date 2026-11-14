@@ -105,6 +105,12 @@ gradlew bootRun --args="--wayon.seed=rest-area-load"
 ```
 휴게소 249곳, 편의시설 1,589개, 매장 643개, 메뉴 6,939개, 판매 Top5 1,053행(휴게소 215곳), 지도 장소 1,467곳이 들어가면 완료입니다.
 
+**공영주차장 (목적지 근처 주차장):** git에 있는 `parking_lot.csv`를 넣습니다. 키가 필요 없습니다. 17,769곳(서울 724 + 전국 공영 17,045)이 들어가면 완료입니다.
+```
+gradlew bootRun --args="--wayon.seed=parking-load --spring.main.web-application-type=none"
+```
+원본을 새로 받을 때만 (한 달에 1번이면 충분, `DATA_GO_KR_KEY`·`SEOUL_DATA_KEY`·`KAKAO_REST_KEY` 필요) `parking-fetch`로 바꿔 실행하고 바뀐 CSV를 커밋합니다. `--spring.main.web-application-type=none`은 서버를 켜 둔 채(8080 사용 중) 적재할 때 필요합니다.
+
 > 2026-11-06에 휴게소 기본키가 숫자 `id`에서 `std_rest_cd`(도로공사 코드)로 바뀌었습니다. 그 전에 휴게소 테이블을 만들었다면 `schema.sql`의 휴게소 테이블(`rest_area`, `facility`, `rest_area_brand`, `rest_area_menu`, `rest_area_top_item`, `rest_area_place`)을 지우고 다시 만든 뒤 위 명령으로 적재합니다. `rest_area_place`(휴게소 지도 장소)는 같은 날 더 생긴 테이블입니다.
 
 도로공사 데이터를 새로 받을 때만 아래를 씁니다 (`server/.env`에 `EX_API_KEY`, `KAKAO_REST_KEY` 필요. 카카오 키는 1번 API에 없는 휴게소의 좌표를 찾는 데 씀). API에서 받아 CSV를 다시 만들고 DB에도 넣습니다. 바뀐 CSV는 커밋합니다.

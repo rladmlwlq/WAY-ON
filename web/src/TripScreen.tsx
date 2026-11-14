@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { ApiError, getMe, type Me, type SearchPlace } from './api'
 import { DepartureChat } from './DepartureChat'
+import { EnergyCard } from './EnergyCard'
 import { Notice } from './Notice'
+import { ParkingCard } from './ParkingCard'
 import { PushToggle } from './PushToggle'
 import { RestAreaCard } from './RestAreaCard'
 import { SearchPanel } from './SearchPanel'
@@ -63,6 +65,12 @@ export function TripScreen({ token, onSignedOut }: Props) {
         )}
 
         {socket.restArea && <RestAreaCard info={socket.restArea} />}
+
+        {socket.energy && <EnergyCard suggest={socket.energy} propose={socket.propose} onClose={socket.dismissEnergy} />}
+
+        {socket.parking && (
+          <ParkingCard suggest={socket.parking} propose={socket.propose} onClose={socket.dismissParking} />
+        )}
 
         {/* 경유지 요청 상태 (7장 waypoint.status): 누가 보냈든 모두에게 */}
         {socket.status === 'online' && socket.trip && socket.waypointStatus && (

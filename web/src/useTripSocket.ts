@@ -30,7 +30,7 @@ export type SocketState =
 /** 출발해요 대화 화면 상태. closed가 있으면 끝난 알림(입력 잠김) */
 export interface Departure extends DepartureCall {
   people: DeparturePerson[]
-  /** 지난 대화 + 이번 대화 (최신이 마지막) */
+  /** 이번 출발 알림의 대화 (최신이 마지막). [출발해요]마다 새 대화방 */
   messages: DepartureMessage[]
   closed: 'DEPARTED' | 'CANCELLED' | 'EXPIRED' | null
   /** 보내기 실패 문구 (조금 뒤 사라짐) */
@@ -69,6 +69,54 @@ export interface ProposePlace {
   lng: number
 }
 
+/** 7장 parking.suggest의 주차장 1곳 (way-on.md 3.6) */
+export interface ParkingPlace {
+  extId: string
+  name: string
+  address: string
+  lat: number
+  lng: number
+  distM: number
+  /** 1시간 요금(원). 무료면 0, 모르면 null */
+  fee1h: number | null
+  feeType: 'FREE' | 'PAID' | 'MIXED'
+  basicMin: number | null
+  basicFee: number | null
+  totalSpaces: number | null
+  /** 서울 시영주차장 일부만 (실시간) */
+  nowParked: number | null
+  openNow: boolean | null
+  phone: string | null
+}
+
+/** 목적지 근처 공영주차장 제안 (차가 목적지 10km 또는 5분 안에 들어오면 한 번) */
+export interface ParkingSuggest {
+  destName: string | null
+  places: ParkingPlace[]
+}
+
+/** 7장 energy.suggest의 장소 1곳 (충전소: 카카오, 주유소: 오피넷) */
+export interface EnergyPlace {
+  type: 'EV_CHARGER' | 'GAS_STATION'
+  extId: string
+  name: string
+  address: string | null
+  lat: number
+  lng: number
+  /** 차에서 직선거리 */
+  distM: number
+  /** 충전소 {category, phone}, 주유소 {brand, gasoline(원/L)} */
+  detail: { category?: string; phone?: string | null; brand?: string; gasoline?: number }
+}
+
+/** 에너지 제안 (F6): 주행 가능 거리가 목적지까지 남은 거리 + 20km보다 짧을 때 한 번 */
+export interface EnergySuggest {
+  energyType: 'EV' | 'FUEL'
+  rangeM: number
+  remainDistM: number | null
+  places: EnergyPlace[]
+}
+
 /** 7장 waypoint.status */
 export interface WaypointStatus {
   requestId: number
@@ -101,6 +149,12 @@ export type TripSocket = SocketState & {
   route: RouteUpdate | null
   /** 마지막 경유지 요청 상태 (누가 보냈든 모두에게 옴) */
   waypointStatus: WaypointStatus | null
+  /** 에너지 제안. 닫거나 세션이 끝나면 null */
+  energy: EnergySuggest | null
+  dismissEnergy: () => void
+  /** 목적지 근처 주차장 제안. 닫거나 세션이 끝나면 null */
+  parking: ParkingSuggest | null
+  dismissParking: () => void
   /** 6-1 경유지 제안. 성공하면 requestId, 실패하면 ApiError (WAYPOINT_FULL, TRIP_NOT_ACTIVE 등) */
   propose: (place: ProposePlace) => Promise<{ requestId: number }>
 }
@@ -117,6 +171,8 @@ export function useTripSocket(token: string): TripSocket {
   const [carState, setCarState] = useState<CarState | null>(null)
   const [route, setRoute] = useState<RouteUpdate | null>(null)
   const [waypointStatus, setWaypointStatus] = useState<WaypointStatus | null>(null)
+  const [parking, setParking] = useState<ParkingSuggest | null>(null)
+  const [energy, setEnergy] = useState<EnergySuggest | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   // reqId를 붙여 보낸 요청(경유지 제안)의 ack/error를 찾는다 (4-2)
   const pending = useRef(new Map<string, { resolve: (data: unknown) => void; reject: (err: ApiError) => void }>())
@@ -128,7 +184,7 @@ export function useTripSocket(token: string): TripSocket {
     let retryMs = 1000
     const stopped = { current: false }
 
-    // 대화 화면을 열 때 지난 대화를 불러오고, 그사이 실시간으로 온 메시지와 합친다
+    // 대화 화면을 열 때 이번 알림의 대화를 불러오고, 그사이 실시간으로 온 메시지와 합친다 ([출발해요]마다 새 대화방)
     const openDeparture = (call: DepartureCall, people: DeparturePerson[]) => {
       setDeparture((prev) => ({
         ...call,
@@ -137,7 +193,7 @@ export function useTripSocket(token: string): TripSocket {
         closed: null,
         error: null,
       }))
-      getDepartureMessages(token)
+      getDepartureMessages(token, call.callId)
         .then(({ messages }) =>
           setDeparture((prev) => (prev && prev.callId === call.callId ? { ...prev, messages: merge(messages, prev.messages) } : prev)),
         )
@@ -185,6 +241,8 @@ export function useTripSocket(token: string): TripSocket {
             setRestArea(null)
             setCarState(null)
             setRoute(null)
+            setParking(null)
+            setEnergy(null)
             break
           case 'trip.state':
             setCarState(d as unknown as CarState)
@@ -195,6 +253,12 @@ export function useTripSocket(token: string): TripSocket {
             setRoute((prev) => (prev && prev.routeVersion === next.routeVersion ? prev : next))
             break
           }
+          case 'energy.suggest':
+            setEnergy(d as unknown as EnergySuggest)
+            break
+          case 'parking.suggest':
+            setParking(d as unknown as ParkingSuggest)
+            break
           case 'waypoint.status':
             setWaypointStatus(d as unknown as WaypointStatus)
             break
@@ -213,7 +277,11 @@ export function useTripSocket(token: string): TripSocket {
             )
             break
           case 'departure.message':
-            setDeparture((prev) => (prev ? { ...prev, messages: merge(prev.messages, [d as unknown as DepartureMessage]) } : prev))
+            setDeparture((prev) =>
+              prev && prev.callId === d.callId
+                ? { ...prev, messages: merge(prev.messages, [d as unknown as DepartureMessage]) }
+                : prev,
+            )
             break
           case 'departure.closed':
             setDeparture((prev) =>
@@ -267,6 +335,8 @@ export function useTripSocket(token: string): TripSocket {
   }, [])
 
   const dismissDeparture = useCallback(() => setDeparture(null), [])
+  const dismissParking = useCallback(() => setParking(null), [])
+  const dismissEnergy = useCallback(() => setEnergy(null), [])
 
   const propose = useCallback((place: ProposePlace) => {
     return new Promise<{ requestId: number }>((resolve, reject) => {
@@ -284,7 +354,7 @@ export function useTripSocket(token: string): TripSocket {
     })
   }, [])
 
-  return { ...state, restArea, departure, myPassengerId, send, dismissDeparture, carState, route, waypointStatus, propose }
+  return { ...state, restArea, departure, myPassengerId, send, dismissDeparture, carState, route, waypointStatus, parking, dismissParking, energy, dismissEnergy, propose }
 }
 
 /** messageId로 겹친 것을 빼고 순서대로 */

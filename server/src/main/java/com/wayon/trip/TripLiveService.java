@@ -177,6 +177,27 @@ public class TripLiveService {
 		});
 	}
 
+	/** 차 위치와 마지막 경로선 ([lng, lat] 목록). 에너지 제안(F6)이 경로 앞쪽에서 찾을 때 쓴다 */
+	public record Ahead(double lat, double lng, List<double[]> path) {
+	}
+
+	/** 세션이 없거나 차 위치를 아직 모르면 null. 경로선이 없으면 path가 빈 목록 */
+	@SuppressWarnings("unchecked")
+	public Ahead select_ahead(long vehicleId) {
+		Live l = live.get(vehicleId);
+		if (l == null) {
+			return null;
+		}
+		synchronized (l) {
+			if (l.car == null || !(l.car.get("lat") instanceof Number lat) || !(l.car.get("lng") instanceof Number lng)) {
+				return null;
+			}
+			Object path = l.route == null ? null : l.route.get("path");
+			return new Ahead(lat.doubleValue(), lng.doubleValue(),
+					path instanceof List<?> p ? List.copyOf((List<double[]>) p) : List.of());
+		}
+	}
+
 	/** 동승자가 붙었을 때(4-1 auth.ok 직후) 보낼 메시지. type → data, 없으면 빈 맵 */
 	public Map<String, Object> select_snapshot(long vehicleId) {
 		Live l = live.get(vehicleId);
