@@ -61,7 +61,8 @@
 3. 기기를 Pleos AVD로 고르고 ▶ 실행
 4. 차 화면에 **"WAY:ON"** 가 뜨면 완료
 
-> `car-app/local.properties`(SDK 경로)는 Studio가 자동으로 만듭니다. git에 올라가지 않으니 손대지 않아도 됩니다.
+> `car-app/local.properties`(SDK 경로)는 Studio가 자동으로 만듭니다. git에 올라가지 않습니다.
+> 휴게소 지도를 보려면 이 파일 끝에 `KAKAO_JS_KEY=`(`server/.env`의 `KAKAO_JS_KEY`와 같은 값)를 한 줄 넣고 다시 빌드합니다. 없으면 지도 없이 정보만 나옵니다.
 
 ---
 
@@ -102,9 +103,17 @@ server/src/main/resources/db/schema.sql
 ```
 gradlew bootRun --args="--wayon.seed=rest-area-load"
 ```
-휴게소 199곳, 편의시설 1,259개, 매장 477개, 메뉴 5,542개, 판매 Top5 883행(휴게소 181곳)이 들어가면 완료입니다.
+휴게소 249곳, 편의시설 1,589개, 매장 643개, 메뉴 6,939개, 판매 Top5 1,053행(휴게소 215곳), 지도 장소 1,467곳이 들어가면 완료입니다.
 
-도로공사 데이터를 새로 받을 때만 아래를 씁니다 (`server/.env`에 `EX_API_KEY` 필요). API에서 받아 CSV를 다시 만들고 DB에도 넣습니다. 바뀐 CSV는 커밋합니다.
+**공영주차장 (목적지 근처 주차장):** git에 있는 `parking_lot.csv`를 넣습니다. 키가 필요 없습니다. 17,769곳(서울 724 + 전국 공영 17,045)이 들어가면 완료입니다.
+```
+gradlew bootRun --args="--wayon.seed=parking-load --spring.main.web-application-type=none"
+```
+원본을 새로 받을 때만 (한 달에 1번이면 충분, `DATA_GO_KR_KEY`·`SEOUL_DATA_KEY`·`KAKAO_REST_KEY` 필요) `parking-fetch`로 바꿔 실행하고 바뀐 CSV를 커밋합니다. `--spring.main.web-application-type=none`은 서버를 켜 둔 채(8080 사용 중) 적재할 때 필요합니다.
+
+> 2026-11-06에 휴게소 기본키가 숫자 `id`에서 `std_rest_cd`(도로공사 코드)로 바뀌었습니다. 그 전에 휴게소 테이블을 만들었다면 `schema.sql`의 휴게소 테이블(`rest_area`, `facility`, `rest_area_brand`, `rest_area_menu`, `rest_area_top_item`, `rest_area_place`)을 지우고 다시 만든 뒤 위 명령으로 적재합니다. `rest_area_place`(휴게소 지도 장소)는 같은 날 더 생긴 테이블입니다.
+
+도로공사 데이터를 새로 받을 때만 아래를 씁니다 (`server/.env`에 `EX_API_KEY`, `KAKAO_REST_KEY` 필요. 카카오 키는 1번 API에 없는 휴게소의 좌표를 찾는 데 씀). API에서 받아 CSV를 다시 만들고 DB에도 넣습니다. 바뀐 CSV는 커밋합니다.
 ```
 gradlew bootRun --args="--wayon.seed=rest-area-fetch"
 ```
@@ -113,6 +122,11 @@ gradlew bootRun --args="--wayon.seed=rest-area-fetch"
 gradlew bootRun --args="--wayon.seed=top5-import --wayon.seed.file=C:/받은/파일.zip"
 ```
 경로에 한글이 있으면 실패할 수 있으니 영문 경로로 복사해서 넣습니다.
+
+**휴게소 지도 장소 (가끔, 한 사람만):** 휴게소 안 매장 위치를 카카오에서 다시 받을 때 (`KAKAO_REST_KEY` 필요). 바뀐 `rest_area_place.csv`를 커밋합니다.
+```
+gradlew bootRun --args="--wayon.seed=rest-area-places"
+```
 
 시연 구간처럼 반대 차로 판단이 정확해야 하는 휴게소는 `rest_area_bearing_override.csv`에 방위각을 직접 적습니다 (`docs/erd.md` 휴게소 적재 규칙).
 
@@ -163,17 +177,16 @@ server/src/main/resources/
 ### 4-5. 외부 API 키
 1. 팀에서 공유받은 키 파일을 **`server/.env`** 로 저장합니다 (파일 이름이 정확히 `.env`)
 2. 들어 있는 키: `EX_API_KEY`, `DATA_GO_KR_KEY`, `OPINET_KEY`, `KAKAO_REST_KEY`, `KAKAO_JS_KEY`, `SEOUL_DATA_KEY`. 규격은 `docs/api.md`
-
-> 아직 서버 코드가 이 파일을 읽지 않습니다. 외부 API 호출 코드를 만들 때 연결합니다.
+> 서버는 시작할 때 `server` 폴더의 이 파일을 읽습니다 (`application.properties`의 `spring.config.import`).
 
 ### 4-6. 폰 웹 연동 (구현할 때 추가)
 아직 서버에 없는 항목입니다. 작업하는 사람이 넣고, 이 매뉴얼에 결과를 적습니다.
 
 | 항목 | 내용 |
 |---|---|
-| WebSocket | `spring-boot-starter-websocket` 추가. 주소는 `/ws` (`docs/app-api.md`) |
-| 허용 Origin | CORS와 WebSocket 모두 `http://localhost:5173`과 Vercel 운영 주소 등록 |
-| 웹 푸시 키 | VAPID 키 쌍을 만들어 `server/.env`에 보관. 공개 키는 서버 API(`GET /api/push/vapid-public-key`)로 웹에 전달 |
+| WebSocket | `/ws` 적용 완료 (`com.wayon.ws`). 인증·ping·`trip.start`/`trip.end`·5분 만료·`passengers.update`, 휴게소 `restarea.*` → 폰 `restarea.info`, 출발해요 `departure.*`(30분 만료, 30일 지난 대화 하루 1번 삭제)까지. 위치·경로·경유지·에너지·주차장 메시지는 아직 |
+| 허용 Origin | CORS와 WebSocket 모두 `http://localhost:5173`과 `WEB_URL`(Vercel 운영 주소, `server/.env`) 적용 완료. Origin 헤더가 없는 차량 앱은 그대로 통과 |
+| 웹 푸시 키 | `server/.env`에 `VAPID_PUBLIC_KEY`·`VAPID_PRIVATE_KEY` (선택 `VAPID_SUBJECT`, 배포 때 `mailto:` 또는 https 주소). 키 쌍은 `com.wayon.push.WebPushSender`의 main으로 만듦. 공개 키는 `GET /api/push/vapid-public-key`로 웹에 전달, 없으면 503이고 푸시는 건너뜀 (WebSocket으로는 받음). 팀이 같은 서버를 쓰면 같은 키 쌍을 공유. 발송은 라이브러리 없이 JDK로 (RFC 8291 암호화, RFC 8292 VAPID) |
 | 배포 | HTTPS 도메인 필요. 배포처는 미정 |
 
 ---
@@ -190,7 +203,7 @@ server/src/main/resources/
 |---|---|
 | Vite | 8.3.6 |
 | React, React DOM | 19.3.1 |
-| TypeScript | 7.0.2 |
+| TypeScript | 6.0.3 (7은 `tsserver`가 없어 IntelliJ에서 임포트 에러가 날 수 있음) |
 | `@vitejs/plugin-react` | 6.2.1 |
 | `@types/react`, `@types/react-dom` | 19.3.0 |
 | `@types/node` | 24.19.2 |
@@ -220,19 +233,14 @@ npm install
      },
    },
    ```
-3. `web/.env.example`을 아래 내용으로 만듭니다 (이 파일만 커밋)
-   ```
-   VITE_API_URL=
-   VITE_KAKAO_JS_KEY=
-   ```
-4. `web/vercel.json`을 아래 내용으로 만듭니다 (새로고침해도 화면이 열리게 함)
+3. `web/vercel.json`을 아래 내용으로 만듭니다 (새로고침해도 화면이 열리게 함)
    ```json
    { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
    ```
-5. `web/package-lock.json`도 함께 커밋합니다
+4. `web/package-lock.json`도 함께 커밋합니다
 
 ### 5-3. 환경변수
-`web/.env.example`을 복사해 `web/.env.local`을 만듭니다.
+각자 `web/.env.local`을 만들고 아래 값을 넣습니다. 이 파일은 커밋하지 않습니다.
 
 | 변수 | 로컬 값 | Vercel 값 |
 |---|---|---|
@@ -254,10 +262,27 @@ npm install
 
 **배포 전 확인:** `npm run build`
 
-### 5-5. Vercel 배포 (한 사람이 한 번)
-1. Vercel에서 저장소를 연결하고 **Root Directory**를 `web`으로 지정
-2. 5-3의 환경변수 등록
-3. 운영 주소를 **카카오 JS SDK 도메인**과 **서버 허용 Origin**(4-6)에 등록. 미리보기 배포는 주소가 바뀌니 운영 주소만 등록
+### 5-5. Vercel 배포 (수동, 모아서 한 번에)
+운영 주소: https://way-on.vercel.app
+
+GitHub와 연결하지 않고 CLI로 직접 배포합니다. 푸시해도 자동으로 배포되지 않습니다. 배포하려면 way-on 프로젝트의 Vercel 계정으로 로그인해야 합니다.
+
+**등록된 환경변수:** `VITE_KAKAO_JS_KEY` (Production). `VITE_API_URL`은 서버를 배포한 뒤 등록합니다. 값은 Vercel 프로젝트의 **Settings > Environment Variables**에서 관리하고, 바꾼 값은 다음 배포부터 적용됩니다.
+
+**도메인 등록:** 운영 주소는 카카오 JS SDK 도메인에 등록되어 있습니다. 서버를 만들 때 **서버 허용 Origin**(4-6)에도 등록합니다. 미리보기 주소는 바뀌니 등록하지 않습니다.
+
+**처음 한 번만** (`web` 폴더에서)
+```
+npx vercel login
+npx vercel link
+```
+`link`에서는 새 프로젝트를 만들지 말고 기존 `way-on` 프로젝트를 고릅니다.
+
+**배포할 때마다**
+1. `develop`을 최신으로 받고, 커밋하지 않은 변경이 없는지 확인합니다. CLI는 내 PC의 파일을 그대로 올립니다.
+2. `web` 폴더에서 `npm run build`로 확인합니다.
+3. `npx vercel --prod`로 배포합니다.
+4. 운영 주소를 폰으로 열어 확인합니다.
 
 ---
 
@@ -283,7 +308,7 @@ npm install
 ---
 
 ## 7. 하지 말 것
-- API 키·서명 키(`*.jks`, `.env`, `.env.local`)를 새로 커밋하지 않기 (`.gitignore` 대상). `.env.example`에는 변수 이름만 적기
+- API 키·서명 키(`*.jks`, `.env`, `.env.local`)를 새로 커밋하지 않기 (`.gitignore` 대상)
 - `develop`에 직접 커밋하지 않기 (main에서 작업 → develop으로 머지)
 - 개인정보가 들어간 참가신청서 작성본을 `docs/`에 올리지 않기
 - 시스템 JAVA_HOME / PATH 변경하지 않기

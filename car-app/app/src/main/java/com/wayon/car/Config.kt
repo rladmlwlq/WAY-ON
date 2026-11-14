@@ -15,6 +15,7 @@ object Config {
     const val PARKING_NEAR_TIME_S = 300              //   또는 5분
 
     const val ACCEPT_TIMEOUT_MS = 10_000L            // 수락 대기
+    const val APPLY_TIMEOUT_MS = 60_000L             // 내비 반영 성공 콜백 대기 (6-4)
     const val REMIND_INTERVAL_MS = 60_000L           // 출발해요 다시 알리기
     const val MESSAGE_MAX_LEN = 40                   // 출발해요 메시지
     const val MAX_PASSENGERS = 4
@@ -23,5 +24,6 @@ object Config {
     const val PING_INTERVAL_MS = 20_000L
     const val RECONNECT_MAX_MS = 30_000L             // 1·2·4 … 최대 30초
     const val FAIL_TOAST_MS = 3_000L                 // "추가하지 못했어요"
-    const val VOICE_LEAD_SILENCE_MS = 200L           // 음성 앞 묵음
+    const val VOICE_LEAD_SILENCE_MS = 200L           // 음성 앞 묵음 (Pleos 권장 150~200ms)
+    const val VOICE_MAX_MS = 15_000L                 // 끝 콜백이 안 와도 이만큼 지나면 포커스를 놓음
 }

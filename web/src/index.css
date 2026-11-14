@@ -1,0 +1,46 @@
+/* 차량 앱 QR 화면(QrScreen.kt)과 같은 색. 차량 화면이 밝은 색 하나라 다크 모드는 두지 않는다 */
+:root {
+  --text: #374151;
+  --text-h: #14213d;
+  --muted: #6b7280;
+  --bg: #f7f9fc;
+  --bg-end: #eaf0fb;
+  --surface: #fff;
+  --field: #f3f6fb;
+  --border: #dce3ef;
+  --accent: #2b6cf6;
+  --accent-text: #fff;
+  --ok: #1f9d55;
+  --wait: #d08a00;
+  --off: #9aa3b2;
+  --danger: #c62828;
+  --danger-bg: #fdecec;
+  --notice-bg: #e8f0ff;
+
+  --sans: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', Roboto, sans-serif;
+
+  font: 16px/1.5 var(--sans);
+  color-scheme: light;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  background: linear-gradient(var(--bg), var(--bg-end)) fixed;
+}
+
+h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+p {
+  margin: 0;
+}

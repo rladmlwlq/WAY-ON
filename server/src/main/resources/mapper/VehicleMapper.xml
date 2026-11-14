@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wayon.vehicle.VehicleMapper">
+
+	<sql id="passengerColumns">
+		id, vehicle_id, nickname, last_connected_at, revoked_at, push_endpoint
+	</sql>
+
+	<insert id="insert_vehicle">
+		INSERT INTO vehicle (public_id, car_token_hash, created_at)
+		VALUES (#{publicId}, #{tokenHash}, #{now})
+	</insert>
+
+	<select id="select_vehicleIdByToken" resultType="long">
+		SELECT id FROM vehicle WHERE car_token_hash = #{tokenHash}
+	</select>
+
+	<update id="update_vehicleSeen">
+		UPDATE vehicle SET last_seen_at = #{now} WHERE id = #{vehicleId}
+	</update>
+
+	<update id="update_passengerConnected">
+		UPDATE passenger SET last_connected_at = #{now} WHERE id = #{passengerId}
+	</update>
+
+	<select id="select_vehicleIdForUpdate" resultType="long">
+		SELECT id FROM vehicle WHERE id = #{vehicleId} FOR UPDATE
+	</select>
+
+	<delete id="delete_connectCodes">
+		DELETE FROM connect_code WHERE vehicle_id = #{vehicleId}
+	</delete>
+
+	<insert id="insert_connectCode">
+		INSERT INTO connect_code (vehicle_id, kind, code_hash, expires_at)
+		VALUES (#{vehicleId}, 'QR', #{codeHash}, #{expiresAt})
+	</insert>
+
+	<select id="select_connectCode" resultType="com.wayon.vehicle.VehicleRows$ConnectCode">
+		SELECT id, vehicle_id, expires_at
+		FROM connect_code
+		WHERE kind = 'QR' AND code_hash = #{codeHash}
+	</select>
+
+	<select id="select_passengerCount" resultType="int">
+		SELECT COUNT(*) FROM passenger WHERE vehicle_id = #{vehicleId} AND revoked_at IS NULL
+	</select>
+
+	<select id="select_nicknameCount" resultType="int">
+		SELECT COUNT(*) FROM passenger
+		WHERE vehicle_id = #{vehicleId} AND revoked_at IS NULL AND nickname = #{nickname}
+	</select>
+
+	<insert id="insert_passenger">
+		INSERT INTO passenger (vehicle_id, reconnect_token_hash, nickname, created_at, last_connected_at)
+		VALUES (#{vehicleId}, #{tokenHash}, #{nickname}, #{now}, #{now})
+	</insert>
+
+	<select id="select_passengerByToken" resultType="com.wayon.vehicle.VehicleRows$Passenger">
+		SELECT <include refid="passengerColumns"/>
+		FROM passenger
+		WHERE reconnect_token_hash = #{tokenHash}
+	</select>
+
+	<select id="select_passengers" resultType="com.wayon.vehicle.VehicleRows$Passenger">
+		SELECT <include refid="passengerColumns"/>
+		FROM passenger
+		WHERE vehicle_id = #{vehicleId} AND revoked_at IS NULL
+		ORDER BY id
+	</select>
+
+	<update id="update_passengerRevoked">
+		UPDATE passenger
+		SET revoked_at = #{now},
+			push_endpoint = NULL, push_p256dh = NULL, push_auth = NULL, push_updated_at = NULL
+		WHERE id = #{passengerId} AND vehicle_id = #{vehicleId} AND revoked_at IS NULL
+	</update>
+
+	<update id="update_pushSubscription">
+		UPDATE passenger
+		SET push_endpoint = #{endpoint}, push_p256dh = #{p256dh}, push_auth = #{auth}, push_updated_at = #{now}
+		WHERE id = #{passengerId}
+	</update>
+
+	<update id="delete_pushSubscription">
+		UPDATE passenger
+		SET push_endpoint = NULL, push_p256dh = NULL, push_auth = NULL, push_updated_at = NULL
+		WHERE id = #{passengerId}
+	</update>
+
+	<select id="select_departureMessages" resultType="com.wayon.vehicle.VehicleRows$Message">
+		SELECT m.id, m.call_id, m.passenger_id, p.nickname, p.revoked_at IS NOT NULL AS revoked,
+			m.kind, m.quick_code, m.body, m.sent_at
+		FROM departure_message m
+		JOIN departure_call c ON c.id = m.call_id
+		LEFT JOIN passenger p ON p.id = m.passenger_id
+		WHERE c.vehicle_id = #{vehicleId}
+			AND m.sent_at &gt;= #{since}
+			<if test="before != null">AND m.id &lt; #{before}</if>
+			<if test="callId != null">AND m.call_id = #{callId}</if>
+		ORDER BY m.id DESC
+		LIMIT #{limit}
+	</select>
+
+</mapper>

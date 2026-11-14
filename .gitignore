@@ -15,6 +15,8 @@ captures/
 
 # 로컬 환경 (PC마다 다름)
 local.properties
+# Claude 데스크톱 앱이 서버·웹을 띄울 때 읽는 설정 (PC별 JDK 경로)
+.claude/launch.json
 
 # 비밀 정보: 서명 키, 환경 변수
 *.jks

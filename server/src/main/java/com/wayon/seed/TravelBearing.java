@@ -10,6 +10,9 @@ import java.util.Map;
  */
 public final class TravelBearing {
 
+	/** 광주원주선의 "광주"는 경기도 광주 */
+	static final String GYEONGGI_GWANGJU = "경기광주";
+
 	/** 방향 도시 좌표 (위도, 경도). 시청·IC 근처 대략값이면 충분하다. */
 	static final Map<String, double[]> CITIES = Map.ofEntries(
 			Map.entry("서울", new double[] { 37.566, 126.978 }),
@@ -54,9 +57,29 @@ public final class TravelBearing {
 			Map.entry("창원", new double[] { 35.228, 128.681 }),
 			Map.entry("마산", new double[] { 35.214, 128.581 }),
 			Map.entry("통영", new double[] { 34.854, 128.433 }),
-			Map.entry("냉정", new double[] { 35.250, 128.850 }));
+			Map.entry("냉정", new double[] { 35.250, 128.850 }),
+			Map.entry("울산", new double[] { 35.539, 129.311 }),
+			Map.entry("함양", new double[] { 35.520, 127.725 }),
+			Map.entry("익산", new double[] { 35.948, 126.958 }),
+			Map.entry("장수", new double[] { 35.647, 127.521 }),
+			Map.entry("봉담", new double[] { 37.218, 126.951 }),
+			Map.entry("동탄", new double[] { 37.200, 127.073 }),
+			Map.entry("원주", new double[] { 37.342, 127.920 }),
+			Map.entry("영천", new double[] { 35.973, 128.939 }),
+			Map.entry(GYEONGGI_GWANGJU, new double[] { 37.429, 127.255 }));
 
 	private TravelBearing() {
+	}
+
+	/**
+	 * 같은 이름의 다른 도시를 가린다. "광주" 방향이 광주원주선이거나 북위 37도 이상(경기·강원) 휴게소면 경기도 광주.
+	 * 0503은 광주원주선 휴게소의 노선을 "중앙선"으로 줘서 노선 이름만으로는 못 가린다 (양평(광주), 2026-11-06).
+	 */
+	public static Integer toward(String directionCity, String routeName, double lat, double lng) {
+		if ("광주".equals(directionCity) && (lat >= 37.0 || routeName != null && routeName.contains("광주원주"))) {
+			return toward(GYEONGGI_GWANGJU, lat, lng);
+		}
+		return toward(directionCity, lat, lng);
 	}
 
 	/** 방향 도시 쪽 방위각. 도시를 모르면 null (양방향 휴게소이거나 좌표표에 없는 도시) */

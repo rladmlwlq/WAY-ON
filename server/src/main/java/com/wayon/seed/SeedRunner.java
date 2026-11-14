@@ -14,8 +14,11 @@ import org.springframework.stereotype.Component;
  *
  * <pre>
  * gradlew bootRun --args="--wayon.seed=rest-area-load"    CSV → 로컬 DB (키 필요 없음)
+ * gradlew bootRun --args="--wayon.seed=rest-area-places"  카카오 → 휴게소 지도 장소 CSV → 로컬 DB (KAKAO_REST_KEY 필요)
  * gradlew bootRun --args="--wayon.seed=rest-area-fetch"   도로공사 API → CSV → 로컬 DB (EX_API_KEY 필요)
  * gradlew bootRun --args="--wayon.seed=top5-import --wayon.seed.file=D:/.../판매순위.zip"   판매순위 파일 → CSV → 로컬 DB
+ * gradlew bootRun --args="--wayon.seed=parking-load"      주차장 CSV → 로컬 DB (키 필요 없음)
+ * gradlew bootRun --args="--wayon.seed=parking-fetch"     공공데이터·서울시 → 주차장 CSV → 로컬 DB (DATA_GO_KR_KEY, SEOUL_DATA_KEY, KAKAO_REST_KEY)
  * </pre>
  */
 @Component
@@ -25,13 +28,15 @@ public class SeedRunner implements ApplicationRunner {
 	private static final Logger log = LoggerFactory.getLogger(SeedRunner.class);
 
 	private final RestAreaSeeder restArea;
+	private final ParkingSeeder parking;
 	private final ConfigurableApplicationContext context;
 	private final org.springframework.core.env.Environment env;
 	private final String mode;
 
-	public SeedRunner(RestAreaSeeder restArea, ConfigurableApplicationContext context,
+	public SeedRunner(RestAreaSeeder restArea, ParkingSeeder parking, ConfigurableApplicationContext context,
 			org.springframework.core.env.Environment env) {
 		this.restArea = restArea;
+		this.parking = parking;
 		this.context = context;
 		this.env = env;
 		this.mode = env.getProperty("wayon.seed");
@@ -47,6 +52,10 @@ public class SeedRunner implements ApplicationRunner {
 					restArea.load();
 				}
 				case "rest-area-load" -> restArea.load();
+				case "rest-area-places" -> {
+					restArea.fetchPlaces();
+					restArea.load();
+				}
 				case "top5-import" -> {
 					String file = env.getProperty("wayon.seed.file");
 					if (file == null) {
@@ -55,8 +64,13 @@ public class SeedRunner implements ApplicationRunner {
 					restArea.importTop5(java.nio.file.Path.of(file));
 					restArea.load();
 				}
+				case "parking-fetch" -> {
+					parking.fetch();
+					parking.load();
+				}
+				case "parking-load" -> parking.load();
 				default -> throw new IllegalArgumentException("모르는 wayon.seed 값: " + mode
-						+ " (rest-area-fetch, rest-area-load, top5-import 중 하나)");
+						+ " (rest-area-fetch, rest-area-load, rest-area-places, top5-import, parking-fetch, parking-load 중 하나)");
 			}
 			log.info("적재 끝: {}", mode);
 		} catch (Exception e) {

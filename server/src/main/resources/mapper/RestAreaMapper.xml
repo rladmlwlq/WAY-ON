@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wayon.restarea.RestAreaMapper">
+
+	<sql id="restAreaColumns">
+		std_rest_cd, name, route_name, direction_label, lat, lng, travel_bearing
+	</sql>
+
+	<sql id="inCodes">
+		<foreach collection="codes" item="c" open="(" separator="," close=")">#{c}</foreach>
+	</sql>
+
+	<select id="findByKakaoIds" resultType="com.wayon.restarea.RestAreaRows$KakaoMatch">
+		SELECT kakao_id, std_rest_cd
+		FROM rest_area_place
+		WHERE kakao_id IN <include refid="inCodes"/>
+	</select>
+
+	<select id="findByCode" resultType="com.wayon.restarea.RestAreaRows$RestArea">
+		SELECT <include refid="restAreaColumns"/>
+		FROM rest_area
+		WHERE std_rest_cd = #{code}
+	</select>
+
+	<select id="findAll" resultType="com.wayon.restarea.RestAreaRows$RestArea">
+		SELECT <include refid="restAreaColumns"/>
+		FROM rest_area
+		ORDER BY std_rest_cd
+	</select>
+
+	<select id="findByCodes" resultType="com.wayon.restarea.RestAreaRows$RestArea">
+		SELECT <include refid="restAreaColumns"/>
+		FROM rest_area
+		WHERE std_rest_cd IN <include refid="inCodes"/>
+	</select>
+
+	<!-- 가격은 0502 메뉴와 이름이 맞은 것(menu_id)만 있음 -->
+	<select id="findLatestTopItems" resultType="com.wayon.restarea.RestAreaRows$TopItem">
+		SELECT t.std_rest_cd, t.base_month, t.rank_no, t.display_name, t.store_name, m.price
+		FROM rest_area_top_item t
+		JOIN (SELECT std_rest_cd, MAX(base_month) AS base_month
+		      FROM rest_area_top_item
+		      WHERE std_rest_cd IN <include refid="inCodes"/>
+		      GROUP BY std_rest_cd) latest
+		  ON latest.std_rest_cd = t.std_rest_cd AND latest.base_month = t.base_month
+		LEFT JOIN rest_area_menu m ON m.id = t.menu_id
+		ORDER BY t.std_rest_cd, t.rank_no
+	</select>
+
+	<select id="findBrands" resultType="com.wayon.restarea.RestAreaRows$Brand">
+		SELECT brd_name, open_time, close_time
+		FROM rest_area_brand
+		WHERE std_rest_cd = #{code}
+		ORDER BY id
+	</select>
+
+	<!-- 휴게소(0503) 먼저, 그다음 주유소(0504) -->
+	<select id="findFacilities" resultType="com.wayon.restarea.RestAreaRows$Facility">
+		SELECT std_rest_cd, source, ps_code, name, detail, open_time, close_time
+		FROM facility
+		WHERE std_rest_cd IN <include refid="inCodes"/>
+		ORDER BY std_rest_cd, CASE source WHEN 'REST_AREA' THEN 0 ELSE 1 END, ps_code, id
+	</select>
+
+	<select id="findPlaces" resultType="com.wayon.restarea.RestAreaRows$Place">
+		SELECT kakao_id, name, kind, lat, lng
+		FROM rest_area_place
+		WHERE std_rest_cd = #{code}
+		ORDER BY kind, name
+	</select>
+
+	<!-- 여름·겨울 메뉴도 같이 준다. 정렬: 베스트·추천 먼저 -->
+	<select id="findMenus" resultType="com.wayon.restarea.RestAreaRows$Menu">
+		SELECT food_name, price, recommended, best, premium
+		FROM rest_area_menu
+		WHERE std_rest_cd = #{code}
+		ORDER BY best DESC, recommended DESC, premium DESC, id
+	</select>
+
+</mapper>

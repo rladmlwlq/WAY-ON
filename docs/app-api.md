@@ -33,6 +33,14 @@
 | 성공 응답 | 본문을 바로 반환 (감싸지 않음). 본문이 없으면 `204` |
 | 실패 응답 | HTTP 상태 + `{"code": "NICKNAME_TAKEN", "message": "이미 쓰는 닉네임이에요"}`. `message`는 폰·차 화면에 그대로 보여도 되는 문장. 코드는 8장 |
 
+**서버 메소드 이름** (2026-11-06)
+
+| 위치 | 규칙 | 예 |
+|---|---|---|
+| 컨트롤러·서비스 | 조회 `select_`, 추가·수정 `save_`, 삭제 `delete_`로 시작 | `select_passengers`, `save_connect`, `delete_passenger` |
+| `save_` 내부 | 추가와 수정이 둘 다 있으면 `rowStat`이나 flag로 나눠 `insert_`, `update_`를 부름. 한쪽뿐이면 바로 부름 | `save_connect` → `insert_passenger` |
+| 매퍼 | `select_`, `insert_`, `update_`, `delete_`로 시작 | `update_pushSubscription` |
+
 ---
 
 ## 1. 연결 흐름 한눈에
@@ -85,8 +93,8 @@ Response `201`
 ```json
 {"code": "k3Qm…(22자)", "url": "https://{웹}/join#k3Qm…", "expiresAt": "2026-11-05T08:02:00.000Z"}
 ```
-- 만료 2분, 한 번 쓰면 폐기. 새로 발급하면 그 차량의 이전 미사용 코드는 폐기합니다.
-- 여러 명이 연결하려면 한 사람이 연결할 때마다 새로 발급합니다 (일회용).
+- 만료 3분. **만료 전까지 QR 하나로 여러 명이 연결**합니다 (2026-11-09 결정, 일회용에서 바꿈). 새로 발급하면 그 차량의 이전 코드는 폐기합니다.
+- 늦게 온 사람은 차량 앱이 QR을 다시 띄워 연결합니다. 이미 연결한 사람은 토큰으로 자동 재연결되므로 영향 없습니다. 주행 중 합류는 [backlog-late-join.md](backlog-late-join.md).
 - 등록 동승자가 4명이면 `409 PASSENGER_LIMIT`.
 
 ### 2-3. `GET /api/vehicles/me/passengers` — 등록 동승자 목록
@@ -123,7 +131,8 @@ Response `200` (최신이 마지막)
  "hasMore": true}
 ```
 - `before`가 없으면 최신 것부터. 위로 올리면 가장 오래된 `messageId`를 `before`로 다시 부릅니다. `size` 최대 50.
-- 보낸 지 30일 지난 메시지는 없습니다 (하루 1번 삭제).
+- `callId`를 주면 그 출발 알림의 대화만 줍니다. 차·폰 대화 화면은 [출발해요]마다 새 대화방이라 이번 알림의 `callId`로 부릅니다 (2026-11-09). 지난 출발 알림 목록(2-6)은 만들었다가 2026-11-13에 뺐습니다 (차 화면에서 쓸 일이 적음).
+
 
 ---
 
@@ -146,7 +155,7 @@ Response `201`
 
 | 실패 | 상태 | 코드 |
 |---|---|---|
-| 코드가 없거나 이미 씀 | 404 | `CODE_INVALID` |
+| 코드가 없음 (새 QR이 발급돼 폐기된 것 포함) | 404 | `CODE_INVALID` |
 | 코드 만료 | 410 | `CODE_EXPIRED` |
 | 닉네임 1~10자 아님, 공백만 | 400 | `NICKNAME_INVALID` |
 | 같은 차에 같은 닉네임 (해제된 동승자는 제외) | 409 | `NICKNAME_TAKEN` |
@@ -209,11 +218,11 @@ Response `200` (차에서 가까운 순)
 
 | type | `extId` | `detail` |
 |---|---|---|
-| `REST_AREA` | `ra:{rest_area.id}` | `{"routeName": "경부선", "direction": "서울방향", "top1": "말죽거리소고기국밥", "facilities": ["04", "12"], "hasGasStation": true}` |
+| `REST_AREA` | `ra:{std_rest_cd}` (`ra:000001`) | `{"routeName": "경부선", "direction": "서울방향", "top1": "말죽거리소고기국밥", "facilities": ["04", "12"], "hasGasStation": true}` |
 | `EV_CHARGER` | `ev:{stat_id}` | `{"operator": "환경부", "available": 2, "total": 4, "maxKw": 100, "accessLimited": false}` |
 | `GAS_STATION` | `opinet:{UNI_ID}` | `{"brand": "SKE", "gasoline": 1689, "diesel": 1559, "lpg": null}` (원/L) |
 | `RESTAURANT` (일반도로) | `kakao:{id}` | `{"category": "…", "phone": "…", "placeUrl": "…"}` |
-| `RESTAURANT` (고속도로) | `ra:{rest_area.id}` | `{"restAreaName": "경산(서울)휴게소", "topItems": [{"rank": 1, "name": "말죽거리소고기국밥", "price": 9000}]}` 휴게소 1곳이 1행 |
+| `RESTAURANT` (고속도로) | `ra:{std_rest_cd}` | `{"restAreaName": "경산(서울)휴게소", "topItems": [{"rank": 1, "name": "말죽거리소고기국밥", "price": 9000}]}` 휴게소 1곳이 1행 |
 
 - `RESTAURANT`는 **경로를 바꾸지 않고 들를 수 있는 곳만** 줍니다 (way-on.md 8.1 맛집 범위). 고속도로 구간은 앞쪽 휴게소의 판매 Top5(`ra:` 행, 우리 DB), 일반도로 구간은 **경로선 200m 안**의 카카오 식당(`kakao:` 행). 고속도로 구간은 길찾기 응답의 도로 이름으로 나눕니다 (api.md 11).
 - `offRouteM`: 경로선에서 떨어진 거리. 휴게소 행은 0.
@@ -222,11 +231,13 @@ Response `200` (차에서 가까운 순)
 
 ### 3-7. `GET /api/rest-areas/{restAreaId}` — 휴게소 상세 (N6, A1)
 
+`restAreaId`는 도로공사 휴게소 코드 6자리(`std_rest_cd`, 예: `000001`). 장소 `extId`의 `ra:` 뒤 값과 같습니다. 다시 적재해도 바뀌지 않습니다.
+
 동승자 토큰.
 
 Response `200`
 ```json
-{"restAreaId": 31, "name": "경산(서울)휴게소", "routeName": "경부선", "direction": "서울방향",
+{"restAreaId": "000048", "name": "경산(서울)휴게소", "routeName": "경부선", "direction": "서울방향",
  "lat": 35.86, "lng": 128.80,
  "topItems": [
    {"rank": 1, "name": "말죽거리소고기국밥", "store": "말죽거리한식당", "price": 9000},
@@ -239,10 +250,58 @@ Response `200`
 ```
 - `openNow`는 서버가 한국 시간으로 계산합니다. `close`가 `open`보다 이르면 다음 날까지로 봅니다.
 - `price`는 0502 메뉴와 이름이 맞을 때만 있습니다 (erd.md 휴게소 적재 규칙).
+- 없는 코드거나 6자리 숫자가 아니면 `404 PLACE_NOT_FOUND`.
 
 ### 3-8. `GET /api/health`
 
 인증 없음. `{"status": "UP", "db": "UP"}` (지금 있는 `HealthController`).
+
+### 3-9. `GET /api/rest-areas/{restAreaId}/map` — 휴게소 지도 (A1, 차 화면 4-7)
+
+차량 토큰 (인증 공통부가 생기면 붙임, 지금은 열려 있음). 휴게소에 도착하면 차량 앱이 한 번 부릅니다.
+
+Response `200`
+```json
+{"restAreaId": "000555", "name": "매송(목포)휴게소", "direction": "목포방향", "lat": 37.265122, "lng": 126.888717,
+ "topMonth": "2026-10",
+ "places": [
+   {"placeId": "kakao:1234", "name": "할리스 매송휴게소목포방향점", "kind": "CAFE", "lat": 37.2647, "lng": 126.8879,
+    "open": "08:00", "close": "20:00", "openNow": true, "topItems": []},
+   {"placeId": "kakao:5678", "name": "매송주유소 목포방향", "kind": "GAS", "lat": 37.2636, "lng": 126.8885,
+    "open": null, "close": null, "openNow": null, "topItems": []}],
+ "building": {
+   "foodCourt": {
+     "topItems": [{"rank": 2, "name": "뚝배기제육", "store": "양갑조국밥", "placeId": null, "price": 10500}],
+     "menus": [{"name": "곰탕", "store": "유가네", "placeId": null, "price": 10000, "best": true, "recommended": false, "premium": false}]},
+   "otherStores": [{"name": "드롭탑(커피전문점)", "open": "08:00", "close": "20:00", "openNow": true,
+                    "topItems": [{"rank": 5, "name": "DT_ICE아메리카노(L)", "store": "카페드롭탑", "price": null}]}],
+   "facilities": [{"code": "04", "name": "수유실", "detail": null, "open": "00:00", "close": "24:00", "source": "REST_AREA"}]}}
+```
+- `lat`·`lng`는 휴게소 건물(지도 중심). `places`는 적재 때 카카오에서 받은 실제 위치의 장소(`rest_area_place`, erd.md). `kind`: `FOOD` `CAFE` `STORE` `GAS` `EV` `TOILET` `ATM`
+- 장소 이름 앞 낱말이 0501 브랜드와 맞으면 `open`·`close`·`openNow`, 판매순위 매장과 맞으면 `topItems`가 붙습니다. 안 맞으면 null·빈 목록
+- `building`: 지도에 따로 위치가 없는 것. `foodCourt.menus`는 0502 메뉴(베스트·추천·프리미엄 먼저). `store`는 메뉴 이름 앞 괄호의 가게(`(유가네)곰탕` → 유가네, 이름은 "곰탕"), 없으면 null(식당가 공용). `foodCourt.topItems`는 판매순위 중 식당가 코너(`한식`, `푸드(…)` 등). `placeId`는 그 가게가 `places`에 있으면 그 ID
+- `otherStores`: 위치를 못 찾은 0501 매장과 판매순위 매장
+- 없는 코드면 `404 PLACE_NOT_FOUND`
+
+### 3-10. `GET /api/search/places?query={검색어}` — 주변 장소 검색 (2026-11-09 추가)
+
+동승자 토큰. 폰 검색창에서 부릅니다. 서버가 카카오 키워드 검색(api.md 5)을 대신 부릅니다 (REST 키를 폰에 노출하지 않음).
+- 중심: 그 차량 ACTIVE 세션의 마지막 차 위치(5-3), 반경 20km, 정확도순 15개. 위치가 없으면 전국에서 찾습니다
+- `query`: 1~50자 (앞뒤 공백 제거)
+
+Response `200`
+```json
+{"places": [
+  {"id": "kk:2084343848", "name": "곰작골나주곰탕 안성휴게소서울방향점", "category": "곰작골나주곰탕",
+   "phone": "031-611-5793", "address": "경기 안성시 원곡면 경부고속도로 372", "lat": 37.0767, "lng": 127.1324,
+   "distM": 71, "url": "https://place.map.kakao.com/2084343848", "restAreaId": "000048"}]}
+```
+- `category`: 카카오 분류의 마지막 칸 (`음식점 > 한식 > 국밥` → `국밥`)
+- `address`: 도로명, 없으면 지번. `distM`: 차와의 거리, 중심이 없으면 null
+- `url`: 카카오맵 장소 페이지 (`https`). **평점·영업시간·메뉴 사진은 카카오 API가 주지 않아** 이 페이지에서 봅니다. 앱이 없으면 모바일 웹으로 열립니다 (2026-11-09 확인)
+- `restAreaId`: 휴게소 안 매장(`rest_area_place.kakao_id`)이면 그 휴게소 코드. 폰은 3-7로 인기 메뉴·영업 중 매장을 덧붙입니다
+- 오류: 토큰 `401`/`403`, 검색어 `400 BAD_REQUEST`, 카카오 실패·키 없음 `503 EXTERNAL_UNAVAILABLE`
+- 폰은 고른 장소의 `id`를 그대로 6-1 `waypoint.propose`의 `extId`로 보냅니다
 
 ---
 
@@ -264,7 +323,7 @@ Response `200`
 ```
 - `role`: `CAR` | `PASSENGER`. 동승자에게는 `"me": {"passengerId": 12, "nickname": "민지"}`가 더 붙습니다.
 - `trip`: 그 차량의 ACTIVE 세션, 없으면 `null`.
-- `openCall`: 열려 있는 출발 알림이 있으면 `departure.called`와 같은 내용, 없으면 `null` (폰을 늦게 열어도 대화 화면으로 바로 가게).
+- `openCall`: 열려 있는 출발 알림이 있으면 `{"callId", "calledAt", "etaS", "destName", "people": [departure.status의 사람 …]}`, 없으면 `null` (폰을 늦게 열거나 차 앱을 다시 켜도 대화 화면으로 바로 가게).
 - 동승자는 `auth.ok` 직후 서버가 `route.update`, `trip.state`를 한 번씩 보내 줍니다 (지도 그리기용).
 
 ### 4-2. 메시지 모양
@@ -287,9 +346,9 @@ Response `200`
 | 세션 만료 | **차량 앱**의 메시지(ping 포함)가 5분 동안 없으면 세션 `EXPIRED`. 폰의 메시지는 세션 수명에 영향 없음 |
 | 다시 붙기 | 끊기면 1초, 2초, 4초 … 최대 30초 간격으로 다시 접속하고 `auth`부터 다시 합니다 |
 | 같은 차량 앱이 두 번 접속 | 나중 접속을 남기고 이전 것은 `4409`로 닫음. 동승자도 같음 (한 사람당 연결 1개) |
-| 닫는 코드 | `4401` 인증 실패·시간 초과, `4403` 해제된 동승자, `4409` 다른 곳에서 접속, `4410` 세션 끝남(동승자에게만, 이후 `trip.started`를 기다리려면 다시 접속) |
+| 닫는 코드 | `4401` 인증 실패·시간 초과, `4403` 해제된 동승자, `4409` 다른 곳에서 접속 (`4410`은 쓰지 않음, 아래 구현 참고) |
 
-> `4410`은 동승자를 닫지 않고 `trip.ended`만 보내는 쪽이 단순할 수 있습니다. 구현하면서 정합니다.
+> **구현 (2026-11-09)**: `4410`은 쓰지 않습니다. 세션이 끝나도(`ENDED`·`EXPIRED`) 동승자 연결은 그대로 두고 `trip.ended`만 보냅니다. 같은 연결로 다음 `trip.started`를 받습니다.
 
 ---
 
@@ -359,13 +418,16 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 ```
 서버 동작: 경로 위에서 `rangeM` 안에 있는 주유소(연료) 또는 충전소(전기)를 찾아 `energy.suggest`를 보냅니다. 동승자가 있으면 폰들에게, 없으면 차량 앱에게 (정차 중 화면용). `trip.low_energy_alerted_at`을 채웁니다.
 
+> **구현 (2026-11-13)**: `energyType`은 `EV` | `FUEL`. 찾는 지점은 차 위치 + 경로선(7-1)에서 차와 가장 가까운 점부터 앞으로 5km마다, 주행 가능 거리 안에서 최대 4곳. 충전소는 지점마다 **카카오 키워드 "전기차충전소"**(반경 3km, 분류에 "충전"이 있는 것만, `extId` `kk:{id}`), 주유소는 **오피넷 `aroundAll`**(반경 5km, 보통휘발유 가격, `extId` `opinet:{UNI_ID}`). 같은 지점은 10분 캐시(오피넷 하루 300건). 합친 뒤 차에서 직선거리 `rangeM` 안만 가까운 순 15곳. 충전소 DB 동기화(`ev_station`)는 쓰지 않음 (사용 가능 대수 없음). `trip.low_energy_alerted_at`은 아직 안 채움
+> - 폰이 고르면 6-1 `waypoint.propose`로 경유지(ADD). `opinet:`은 서버가 보낸 값을 기억해 두었다가 찾고, `kk:` 충전소는 종류를 `EV_CHARGER`로 저장
+
 ### 5-8. `parking.near-dest` — 목적지 근처 (N5)
 
 **판단은 차량 앱**: 목적지 남은 거리 10km 이하 또는 남은 시간 5분 이하, 목적지 1개당 1번.
 ```json
-{"type": "parking.near-dest", "data": {"remainDistM": 9800, "remainTimeS": 840}}
+{"type": "parking.near-dest", "data": {"destName": "서현역", "remainDistM": 9800, "remainTimeS": 840}}
 ```
-서버 동작: 목적지 반경 1km 공영주차장을 `parking_lot`에서 찾아 `parking.suggest`를 보냅니다 (동승자 있으면 폰, 없으면 차).
+서버 동작: 목적지 반경 1km 공영주차장을 `parking_lot`에서 찾아 `parking.suggest`를 보냅니다 (동승자 있으면 폰, 없으면 차). 1km 안에 없으면 2km까지, 최대 20곳. 목적지는 `car.route`(5-4)로 저장된 값입니다. 차는 목적지가 바뀌는 순간 이 메시지를 보내서 새 `car.route`보다 먼저 올 수 있으므로, 저장된 목적지 이름이 `destName`과 다르면 기다렸다가 맞는 `car.route`가 오면 그때 보냅니다. 차량 앱은 서버에 붙어 세션이 있을 때만 판단합니다 (끊긴 동안 판단하면 보낸 것으로 표시만 되고 버려짐) (2026-11-13 구현).
 
 ### 5-9. `restarea.approach`, `restarea.arrived`, `restarea.left` — 휴게소 도착 안내 (A1)
 
@@ -378,7 +440,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 ```json
 {"type": "restarea.approach", "data": {"requestId": 88}}
 ```
-서버는 `requestId`로 `waypoint_request.place_ext_id`(`ra:31`)를 찾아 폰들에게 `restarea.info`를 보냅니다.
+서버는 `requestId`로 `waypoint_request.place_ext_id`(`ra:000048`)를 찾아 폰들에게 `restarea.info`를 보냅니다.
 
 ### 5-10. `waypoint.accept`, `waypoint.reject` — 운전자 확인 (F3)
 
@@ -387,7 +449,8 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 {"type": "waypoint.reject", "data": {"requestId": 88}}
 ```
 - **처리 순서 (D7): 서버 선점 → 내비 호출 → 결과 기록.** 차량 앱은 `waypoint.accept`에 대한 `ack`를 받은 뒤에만 `addWaypoint`·`requestRoute`를 부릅니다. `error {"code": "REQUEST_EXPIRED"}`가 오면 부르지 않습니다.
-- 10초 안에 아무것도 안 보내면 서버가 `EXPIRED`로 바꾸고 차량 앱에 `waypoint.expired`를 보냅니다.
+- ~~10초 안에 아무것도 안 보내면 서버가 `EXPIRED`로 바꾸고 차량 앱에 `waypoint.expired`를 보냅니다.~~
+- **바뀜 (2026-11-09): 그대로 두면 자동 수락.** 운전자가 10초 동안 아무것도 누르지 않으면 차량 앱이 스스로 `waypoint.accept`를 보냅니다 (운전 중 화면을 누르지 않아도 되게, 원치 않을 때만 [거절]). 서버 마감은 네트워크 지연을 감안해 **15초**이고, 그때까지 수락이 안 오면(차량 앱이 꺼짐 등) `EXPIRED` + `waypoint.expired`.
 
 ### 5-11. `waypoint.result` — 내비 반영 결과
 
@@ -402,7 +465,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 출발 알림은 **차량 토큰만** 열 수 있습니다. 상세 규칙은 출발해요 기획 7장.
 | 메시지 | data | 비고 |
 |---|---|---|
-| `departure.call` | `{}` | 정차 중에만 (차량 앱이 판단). 이미 `OPEN`이 있으면 `error CALL_ALREADY_OPEN` |
+| `departure.call` | `{"destName": "부산역", "etaS": 5400}` (둘 다 없어도 됨) | 정차 중에만 (차량 앱이 판단). 목적지 이름·남은 시간은 차량 앱이 내비 값으로 채워 알림 문구에 씀 (2026-11-09 추가). 응답 `ack {"callId", "calledAt", "etaS", "destName", "nextRestAreaM"}`를 먼저 보내고 그 뒤 `departure.status`. 이미 `OPEN`이 있으면 `error CALL_ALREADY_OPEN` |
 | `departure.remind` | `{"callId": 40}` | 1분에 1번. 응답 없는 사람에게만 다시 푸시 |
 | `departure.close` | `{"callId": 40, "reason": "DEPARTED"}` | `DEPARTED` 출발 / `CANCELLED` 취소 |
 | `departure.message` | `{"callId": 40, "kind": "QUICK", "quickCode": "HURRY"}` 또는 `{"callId": 40, "kind": "TEXT", "body": "B동 앞이에요"}` | 운전자 빠른 답장은 `TAKE_TIME`, `HURRY`만 |
@@ -426,6 +489,13 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 - 응답 `ack {"requestId": 88}`. 이전 `PENDING` 요청이 있으면 그것을 `EXPIRED`로 바꾸고 새 요청을 받습니다 (마지막 요청 우선, way-on.md 5장 6번).
 - 장소 정보는 폰이 보낸 값을 그대로 저장하지 않고, **서버가 `extId`로 다시 찾은 값**을 저장합니다 (폰이 좌표를 바꿔 보내는 것 방지). 다시 못 찾으면 `error PLACE_NOT_FOUND`.
 
+> **구현 (2026-11-09)**: 폰은 3-10 검색 결과를 `{"place": {"extId": "kk:{카카오 ID}", "name", "lat", "lng"}}`로 보냅니다 (`type`은 보내지 않음, 서버가 정함).
+> - `kk:`: 카카오에 ID 조회 API가 없어서, 폰이 준 이름으로 그 좌표 근처를 다시 검색해 **같은 ID가 나오면** 그 결과의 이름·주소·좌표를 저장합니다. 종류는 카카오 분류로 정합니다: `PK6` → `PARKING`, `OL7` → `GAS_STATION`, 그 밖 → `RESTAURANT`
+> - 휴게소 안 매장(`rest_area_place`)이면 **그 휴게소(`REST_AREA`, `ra:{코드}`)로 바꿔** 넣습니다. 경유지는 휴게소가 되고 도착 안내(5-9, A1)가 그대로 동작합니다
+> - `ra:{코드}`도 받습니다 (3-6 목록용)
+> - 경유지 수는 차가 마지막으로 보낸 `car.route`(5-4)로 셉니다
+> - `action`이 `ADD`인데 경유지가 이미 2개면 `WAYPOINT_FULL`. 세션이 없으면 `TRIP_NOT_ACTIVE`, 차량 토큰이면 `FORBIDDEN_ROLE`
+
 ### 6-2. `departure.message` — 출발해요 답장
 
 ```json
@@ -445,13 +515,13 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 | `trip.started` | 폰 | `{"tripId": "…", "startedAt": "…"}` |
 | `trip.ended` | 폰 | `{"reason": "ENDED"}` 또는 `"EXPIRED"` |
 | `trip.state` | 폰 | `{"car": {"lat", "lng", "heading", "at"}, "gear": "DRIVE", "energy": {"energyType", "energyPct", "rangeM"}}` 위치가 올 때마다 |
-| `route.update` | 폰 | 아래 7-1 |
+| `route.update` | 둘 다 | 아래 7-1. 차는 시연 주행에 씀 (car-app-design.md 9장) |
 | `passengers.update` | 차 | `{"passengers": [{"passengerId", "nickname", "online", "pushEnabled"}]}` 연결·끊김·해제 때 |
 | `waypoint.request` | 차 | 아래 7-2 |
 | `waypoint.expired` | 차 | `{"requestId": 88}` 10초 초과 또는 새 요청이 와서 밀림 → 수락 화면 닫기 |
-| `waypoint.status` | 폰 | `{"requestId": 88, "status": "APPLIED", "failReason": null}` 상태가 바뀔 때마다. 모든 동승자에게 (누가 요청했는지 `requestedBy` 닉네임 포함) |
-| `energy.suggest` | 폰 (없으면 차) | `{"energyType", "rangeM", "remainDistM", "places": [3-6의 place …]}` |
-| `parking.suggest` | 폰 (없으면 차) | 가까운 순으로 보냄. 폰에서 **가까운 순 / 싼 순**(`fee1h`, NULL은 맨 뒤)을 바꿔 봄 (way-on.md 8.1). `{"destName", "places": [{"extId": "pl:5120", "name", "address", "lat", "lng", "distM", "fee1h", "feeType", "totalSpaces", "nowParked", "openNow"}]}` |
+| `waypoint.status` | 폰 | `{"requestId": 88, "status": "APPLIED", "failReason": null, "requestedBy": "민지", "placeName": "경산(서울)휴게소", "action": "ADD"}` 상태가 바뀔 때마다. 모든 동승자에게 |
+| `energy.suggest` | 폰 (없으면 차) | `{"energyType": "EV", "rangeM", "remainDistM", "places": [{"type": "EV_CHARGER" | "GAS_STATION", "extId", "name", "address", "lat", "lng", "distM", "detail"}]}`. `detail`: 충전소 `{"category", "phone"}`, 주유소 `{"brand", "gasoline"}`(원/L). `distM`은 차에서 직선거리 (5-7 구현) |
+| `parking.suggest` | 폰 (없으면 차) | 가까운 순으로 보냄. 폰에서 **가까운 순 / 싼 순**(`fee1h`, NULL은 맨 뒤)을 바꿔 봄 (way-on.md 8.1). `{"destName", "places": [{"extId": "pl:5120", "name", "address", "lat", "lng", "distM", "fee1h", "feeType", "basicMin", "basicFee", "totalSpaces", "nowParked", "openNow", "phone"}]}`. `fee1h`: 1시간 요금(무료 0, 모름 null). 추가 요금이 비어 있으면 기본 단위가 반복된다고 보고 계산 (erd.md). `openNow`: 한국 시간 평일·토·일 시간으로, 공휴일 달력은 안 봄, 모르면 null |
 | `restarea.info` | 폰 | `{"phase": "APPROACH" \| "ARRIVED" \| "LEFT", "restArea": 3-7 응답과 같은 모양}` (`LEFT`는 `restArea` 없이 닫기만) |
 | `departure.called` | 폰 (+ Web Push) | `{"callId": 40, "calledAt", "etaS", "destName", "nextRestAreaM"}` |
 | `departure.message` | 둘 다 | 2-5의 메시지 1개 |
@@ -483,6 +553,8 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
   "action": "ADD",
   "expiresAt": "2026-11-05T08:20:10.000Z"}}
 ```
+- `place.extId`도 붙습니다 (2026-11-09 추가). 차량 앱이 `myWaypoints`에 저장해 휴게소 도착 카드에 씁니다
+- `expiresAt`은 자동 수락 시각 (요청 + 10초). 서버 마감은 그보다 5초 뒤 (5-10)
 - `action`은 `ADD` | `SET_DEST`. `SET_DEST`면 차 화면에 "목적지를 ○○로 바꿀까요?"
 - 주행 중에도 보냅니다. 수락 화면은 DO 화면으로 짧게 (way-on.md 3.5).
 
@@ -491,7 +563,7 @@ NaviHelper `onDrivingInfo`와 차량 앱이 기억하는 경유지 좌표를 합
 Service Worker가 받는 JSON. 페이지가 열려 있어도 `departure.called`와 같이 보냅니다 (알림 중복은 Service Worker가 `tag`로 합침).
 ```json
 {"kind": "DEPARTURE_CALLED", "callId": 40, "title": "곧 출발해요",
- "body": "부산역까지 약 3시간 30분 · 답장해 주세요", "url": "/trip?call=40", "tag": "departure-40"}
+ "body": "부산역까지 약 3시간 30분 · 답장해 주세요", "url": "/?call=40", "tag": "departure-40"}
 ```
 - `notificationclick`에서 `clients.openWindow(url)`. 열려 있는 창이 있으면 그 창을 앞으로.
 - 푸시 서버가 `404`·`410`을 주면 구독을 지웁니다 (erd.md 출발 알림 규칙).
@@ -505,8 +577,8 @@ Service Worker가 받는 JSON. 페이지가 열려 있어도 `departure.called`�
 |---|---|---|---|
 | `TOKEN_INVALID` | 401 | 토큰 없음·틀림·만료·해제 | "다시 연결해 주세요" |
 | `FORBIDDEN_ROLE` | 403 | 차량만 할 수 있는 것을 동승자가 (또는 반대) | — |
-| `CODE_INVALID` | 404 | QR 코드 없음·이미 씀 | "QR을 다시 띄워 주세요" |
-| `CODE_EXPIRED` | 410 | QR 2분 지남 | "QR이 만료됐어요" |
+| `CODE_INVALID` | 404 | QR 코드 없음·폐기됨 | "QR을 다시 띄워 주세요" |
+| `CODE_EXPIRED` | 410 | QR 3분 지남 | "QR이 만료됐어요" |
 | `NICKNAME_INVALID` | 400 | 1~10자 아님 | "닉네임은 1~10자로 정해 주세요" |
 | `NICKNAME_TAKEN` | 409 | 같은 차에 같은 닉네임 | "이미 쓰는 닉네임이에요" |
 | `PASSENGER_LIMIT` | 409 | 동승자 4명 | "동승자는 4명까지 연결할 수 있어요" |
@@ -519,6 +591,7 @@ Service Worker가 받는 JSON. 페이지가 열려 있어도 `departure.called`�
 | `CALL_ALREADY_OPEN` | 409 | 열린 출발 알림이 있음 | — (기존 것을 보여 줌) |
 | `CALL_CLOSED` | 409 | 닫힌 출발 알림에 답장 | "출발 알림이 끝났어요" |
 | `REMIND_TOO_SOON` | 429 | 다시 알리기 1분 안 됨 | "잠시 뒤에 다시 알릴 수 있어요" |
+| `MESSAGE_TOO_FAST` | 429 | 동승자가 출발해요 메시지를 1초에 2건 이상 | "조금 천천히 보내 주세요" |
 | `MESSAGE_INVALID` | 400 | 빠른 답장 코드가 그 사람 것이 아님, 텍스트 1~40자 아님 | — |
 | `EXTERNAL_UNAVAILABLE` | 503 | 외부 API 실패·한도 초과 (오피넷 300건 등) | "잠시 뒤에 다시 시도해 주세요" |
 | `BAD_REQUEST` | 400 | 형식 틀림 | — |
@@ -532,7 +605,7 @@ WebSocket에서는 HTTP 상태 없이 `error` 메시지의 `code`만 씁니다.
 **기준값** (way-on.md 5장 12번. 서버 설정값으로 둠)
 | 항목 | 값 |
 |---|---|
-| QR 만료 | 2분 |
+| QR 만료 | 3분 (만료 전까지 여러 명) |
 | 동승자 토큰 | 마지막 연결 후 90일 |
 | 동승자 최대 | 4명 |
 | 세션 만료 | 차량 앱 무통신 5분 |
@@ -551,6 +624,5 @@ WebSocket에서는 HTTP 상태 없이 `error` 메시지의 `code`만 씁니다.
 
 **정하지 않은 것**
 - 4자리 PIN 연결: 주행 중 sign-in에 해당하는지 Pleos 답을 기다리는 중이라 넣지 않았습니다 (`connect-codes`의 `kind`만 열어 둠).
-- 세션이 끝났을 때 동승자 WebSocket을 닫을지(`4410`), `trip.ended`만 보내고 유지할지 (4-3).
 - 폰의 위치를 서버에 보낼지: 지금 기능 중에는 폰 위치를 쓰는 곳이 없어서 넣지 않았습니다. `trip_passenger.consented_at`은 동의 기록만 합니다.
 - 카카오모빌리티 하루 한도: 경로 다시 계산 기준(500m·1분)은 한도를 확인한 뒤 조정합니다.

@@ -215,6 +215,8 @@ GET /openapi/business/serviceAreaRoute?key={EX_API_KEY}&type=json&numOfRows=99&p
 | `travel_bearing` | **API에 없음.** 방향 도시 쪽 방위각으로 계산, 시연 구간은 수동 입력 (2026-11-05 결정, erd.md 휴게소 적재 규칙) |
 | `std_rest_cd` | 1 `stdRestCd` (`000001`). 0501~0503과 연결하는 코드. 0504(주유소)와 판매순위 파일(10)은 코드가 안 맞아 **이름으로** 연결 |
 
+1번에 없는 휴게소(2026-11-06 기준 50곳)는 0501~0503·2번의 이름·주소와 카카오 키워드 검색 좌표로 더합니다. 규칙은 erd.md 휴게소 적재 규칙.
+
 휴게소 목록은 자주 바뀌지 않으므로 **seed 생성 시 한 번 호출**해서 SQL로 만듭니다 (D9). 앱 실행 중에는 호출하지 않습니다.
 
 ---
@@ -753,7 +755,7 @@ Authorization: KakaoAK {KAKAO_REST_KEY}
 ## 6. Kakao Maps JavaScript SDK (동승자 웹 지도)
 
 - 키: `KAKAO_JS_KEY` (웹페이지에 노출되는 키. 등록 도메인에서만 동작)
-- 등록 도메인: `http://localhost:8080`, `http://localhost:5173`. 배포 주소와 폰 테스트용 PC IP는 필요할 때 추가
+- 등록 도메인: `http://localhost:5173`, `https://way-on.vercel.app` (2026-11-06 SDK 응답 200 확인). 폰 테스트용 PC IP는 필요할 때 추가
 - 카카오맵 사용 설정 ON 완료 (2026-11-04)
 - 로드: `<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey={KAKAO_JS_KEY}"></script>`
 
