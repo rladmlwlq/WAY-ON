@@ -33,7 +33,8 @@ docs/      설계 문서
 - 위치: [`apk/WayOn_WayOn_release.apk`](apk/WayOn_WayOn_release.apk) (서명된 릴리스, versionName 0.1.0)
 - 대상: Pleos Connect Emulator 2.1.0 (Android 14, API 34), minSdk 28
 - 화면 규격: 2560×1440 가로 (에뮬레이터 기본 디스플레이)
-- **서버를 아직 배포하지 않아**, 이 APK는 에뮬레이터를 띄운 PC의 로컬 서버(`http://10.0.2.2:8080`)에 붙습니다. 서버 없이 실행하면 앱은 뜨지만 화면 위에 "서버 연결 끊김"이 보이고 동승자 기능은 동작하지 않습니다.
+- 서버: 이 APK는 `https://platypus-gently-payable.ngrok-free.dev`에 붙습니다 (팀 PC의 서버를 ngrok 고정 주소로 연결, 폰 웹도 같은 주소의 `/join`). 별도 설치 없이 차량 앱과 동승자 폰 웹을 바로 쓸 수 있습니다. 폰 브라우저로 처음 열면 ngrok 안내 페이지가 한 번 나오는데 [Visit Site]를 누르면 됩니다.
+- 이전에 다른 키로 서명된 WAY:ON이 설치돼 있으면 먼저 지우고(`adb uninstall com.wayon.car`) 설치합니다.
 
 ## 실행 방법
 
@@ -60,6 +61,7 @@ gradlew bootRun --args="--wayon.seed=parking-load --spring.main.web-application-
 
 ### 4. 폰 웹
 `web/.env.local`에 `VITE_KAKAO_JS_KEY`를 넣고 `web` 폴더에서 `npm install`, `npm run dev` → `http://localhost:5173`.
+웹을 따로 띄우지 않고 서버 하나로 쓰려면 `server` 폴더에서 `gradlew -Pweb bootRun` → 서버가 폰 웹을 빌드해 같은 주소(`http://localhost:8080`, QR 주소 `/join#코드`)로 내보냅니다. 밖에서 접속하게 할 때는 이 8080을 HTTPS 주소에 연결하고(예: `ngrok http --url=<고정 주소> 8080`), 서버는 `WEB_URL=<그 주소>`로, 차량 앱은 `SERVER_URL`·`WEB_URL`을 그 주소로 빌드합니다.
 실제 폰으로 시험할 때는 USB 디버깅으로 연결한 뒤 `adb reverse tcp:5173 tcp:5173`, `adb reverse tcp:8080 tcp:8080`을 하고 폰 **크롬**에서 `localhost:5173`을 엽니다 (localhost라 Web Push 알림도 시험됨).
 
 ### 5. 차량 앱

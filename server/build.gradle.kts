@@ -36,3 +36,21 @@ dependencies {
 tasks.withType<Test> {
 	useJUnitPlatform()
 }
+
+// -Pweb: 폰 웹(../web)을 빌드해 서버 정적 파일로 같이 내보낸다. 웹을 따로 배포하지 않고 서버 주소 하나로 쓸 때 (README)
+val webDir = file("../web")
+val buildWeb by tasks.registering(Exec::class) {
+	workingDir = webDir
+	val npm = if (System.getProperty("os.name").startsWith("Windows")) listOf("cmd", "/c", "npm") else listOf("npm")
+	commandLine(npm + listOf("run", "build"))
+	inputs.dir(webDir.resolve("src"))
+	inputs.dir(webDir.resolve("public"))
+	inputs.files(webDir.resolve("index.html"), webDir.resolve("package.json"), webDir.resolve(".env.local")).optional()
+	outputs.dir(webDir.resolve("dist"))
+}
+if (project.hasProperty("web")) {
+	tasks.processResources {
+		dependsOn(buildWeb)
+		from(webDir.resolve("dist")) { into("static") }
+	}
+}
